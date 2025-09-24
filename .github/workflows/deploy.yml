@@ -1,0 +1,117 @@
+name: Deploy Backend to Elastic Beanstalk (Docker)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPO_URI: ${{ secrets.ECR_REPO_URI }}   # ej: 123456789012.dkr.ecr.us-east-2.amazonaws.com/three-tier-be
+  EB_APP_NAME: ${{ secrets.EB_APP_NAME }}     # ej: three-tier-be-app
+  EB_ENV_NAME: ${{ secrets.EB_ENV_NAME }}     # ej: three-tier-be-env
+  EB_S3_BUCKET: ${{ secrets.EB_S3_BUCKET }}   # ej: eb-app-bundles-123456789012-us-east-2
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Define build vars
+        id: vars
+        shell: bash
+        run: |
+          echo "IMAGE_TAG=sha-${GITHUB_SHA::7}-$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+          echo "BUNDLE_KEY=dockerrun-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run: |
+          docker build -t "$ECR_REPO_URI:$IMAGE_TAG" .
+
+      - name: Push image to ECR
+        run: |
+          docker push "$ECR_REPO_URI:$IMAGE_TAG"
+
+      - name: Create Dockerrun.aws.json (single container)
+        shell: bash
+        run: |
+          cat > Dockerrun.aws.json <<EOF
+          {
+            "AWSEBDockerrunVersion": "1",
+            "Image": {
+              "Name": "${ECR_REPO_URI}:${IMAGE_TAG}",
+              "Update": "true"
+            },
+            "Ports": [
+              { "ContainerPort": "80" }
+            ],
+            "Logging": "/var/log/app"
+          }
+          EOF
+          cat Dockerrun.aws.json
+
+      - name: Zip bundle
+        run: zip -r "$BUNDLE_KEY" Dockerrun.aws.json
+
+      - name: Upload bundle to S3
+        run: aws s3 cp "$BUNDLE_KEY" "s3://$EB_S3_BUCKET/$BUNDLE_KEY"
+
+      - name: Create EB Application Version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APP_NAME" \
+            --version-label "$IMAGE_TAG" \
+            --source-bundle S3Bucket="$EB_S3_BUCKET",S3Key="$BUNDLE_KEY" \
+            --process
+
+      - name: Update EB Environment
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENV_NAME" \
+            --version-label "$IMAGE_TAG"
+      
+      - name: Monitor EB Events
+        shell: bash
+        run: |
+          echo "Esperando a que el ambiente alcance estado Ready + (Green/Ok)..."
+          end=$((SECONDS+1800))  # 30 min
+
+          while [ $SECONDS -lt $end ]; do
+            # Muestra sólo los mensajes de eventos recientes (opcional; quita si prefieres tabla)
+            aws elasticbeanstalk describe-events \
+              --environment-name "$EB_ENV_NAME" \
+              --region "$AWS_REGION" \
+              --max-items 5 \
+              --output table
+
+            read -r ENV_STATUS HEALTH HEALTH_STATUS VERSION <<<"$(aws elasticbeanstalk describe-environments \
+              --environment-names "$EB_ENV_NAME" \
+              --region "$AWS_REGION" \
+              --query 'Environments[0].[Status,Health,HealthStatus,VersionLabel]' \
+              --output text)"
+
+            echo "Estado actual: Status=$ENV_STATUS | Health=$HEALTH | HealthStatus=$HEALTH_STATUS"
+
+            if [[ "$ENV_STATUS" == "Ready" && ( "$HEALTH" == "Green" || "$HEALTH_STATUS" == "Ok" ) ]]; then
+              echo "✅ Ambiente listo: Ready + ${HEALTH}/${HEALTH_STATUS}"
+              exit 0
+            fi
+
+            sleep 30
+          done
+
+          echo "⏰ Timeout esperando Ready + (Green/Ok)"
+          exit 1
