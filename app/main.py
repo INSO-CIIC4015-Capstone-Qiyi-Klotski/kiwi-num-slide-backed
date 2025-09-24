@@ -4,7 +4,7 @@ app = FastAPI(title="three-tier BE")
 
 @app.get("/")
 def root():
-    return {"message": "Hello from FastAPI on EB via ECR (port 80)! crear un commit"}
+    return {"message": "Hello from FastAPI on EB via ECR (port 80)! Commit para trigger los deploy action"}
 
 @app.get("/health")
 def health():
