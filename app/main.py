@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from .db import ping_db
 
 app = FastAPI(title="three-tier BE")
 
@@ -9,4 +10,8 @@ def root():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+@app.get("/db-ping")
+def db_ping():
+    return {"db": "ok" if ping_db() else "down"}
 
