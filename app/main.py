@@ -7,7 +7,8 @@ app = FastAPI(title="three-tier BE")
 # Orígenes permitidos (añade tu dominio del FE en producción)
 origins = [
     "http://localhost:3000",
-    "https://www.janieljoelnunezquintana.com/",
+    "https://janieljoelnunezquintana.com",
+    "https://www.janieljoelnunezquintana.com",
 ]
 
 app.add_middleware(
