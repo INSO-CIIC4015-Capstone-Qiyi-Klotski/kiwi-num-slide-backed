@@ -1,4 +1,5 @@
-.env
+.env.prod
+.env.local
 .idea/
 *.iml
 *.ipr

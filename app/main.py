@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .db import ping_db
+from .db import ping_db, insert_health, read_health
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="three-tier BE")
@@ -30,4 +30,14 @@ def health():
 @app.get("/db-ping")
 def db_ping():
     return {"db": "ok" if ping_db() else "down"}
+
+
+@app.post("/health/write")
+def health_write(note: str = "test from api"):
+    insert_health(note)
+    return {"message": f"note '{note}' inserted"}
+
+@app.get("/health/read")
+def health_read():
+    return read_health()
 
