@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 from urllib.parse import quote_plus
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
@@ -14,24 +15,16 @@ DB_NAME = os.getenv("DB_NAME", "")
 
 DATABASE_URL = os.getenv("DATABASE_URL") or f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300, future=True)
 
-def ping_db() -> bool:
+@contextmanager
+def get_conn():
+    """Conexión sin transacción (lecturas)."""
     with engine.connect() as conn:
-        return conn.execute(text("SELECT 1")).scalar() == 1
+        yield conn
 
-
-def insert_health(note: str):
-    with engine.begin() as conn:  # begin = abre transacción automática
-        conn.execute(text("INSERT INTO app_health (note) VALUES (:note)"), {"note": note})
-
-
-def read_health():
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text("SELECT id, note, created_at FROM app_health ORDER BY created_at DESC")
-        ).fetchall()
-    return [
-        {"id": str(r[0]), "note": r[1], "created_at": r[2].isoformat()}
-        for r in rows
-    ]
+@contextmanager
+def get_tx():
+    """Con transacción automática (escrituras)."""
+    with engine.begin() as conn:
+        yield conn
