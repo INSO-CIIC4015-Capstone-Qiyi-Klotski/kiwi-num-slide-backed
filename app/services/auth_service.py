@@ -5,6 +5,7 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
 from passlib.hash import bcrypt
 
+from ..core import security
 from ..core.security import create_verify_token, decode_token
 from ..repositories import users_repo
 from ..services.email_services import send_simple_email, SES_SENDER_EMAIL, AWS_REGION
@@ -65,3 +66,29 @@ def verify_account_by_token(token: str) -> dict:
 
     users_repo.mark_verified(user_id)
     return {"ok": True}
+
+
+
+def login_user(email: str, password: str):
+    user = users_repo.get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not security.verify_password(password, user["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    access_token = security.create_access_token(
+        user_id=user["id"],
+        email=user["email"]
+    )
+
+    return {
+        "access_token": access_token,
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "is_verified": bool(user["is_verified"]),
+        },
+        "needs_verification": not bool(user["is_verified"]),
+    }

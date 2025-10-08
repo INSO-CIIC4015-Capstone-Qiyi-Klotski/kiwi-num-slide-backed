@@ -16,6 +16,11 @@ class VerifyTokenIn(BaseModel):
     token: str
 
 
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+
 # ===== Outputs =====
 class UserOut(BaseModel):
     id: int
@@ -26,3 +31,11 @@ class UserOut(BaseModel):
 
 class VerifyOut(BaseModel):
     ok: bool
+
+
+class LoginOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+    needs_verification: bool
+

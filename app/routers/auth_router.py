@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from ..schemas.auth_schema import RegisterIn, UserOut, VerifyEmailIn
+from ..schemas.auth_schema import RegisterIn, UserOut, VerifyEmailIn, LoginOut, LoginIn
 from ..services import auth_service
 from fastapi import Query
 
@@ -22,3 +22,14 @@ def send_verification_email(body: VerifyEmailIn):
 def confirm_verification_via_get(token: str = Query(...)):
     result = auth_service.verify_account_by_token(token)
     return {"ok": True, "message": "Email verified successfully"}
+
+
+@router.post("/login", response_model=LoginOut)
+def login(body: LoginIn):
+    result = auth_service.login_user(body.email, body.password)
+    return {
+        "access_token": result["access_token"],
+        "token_type": "bearer",
+        "user": result["user"],
+        "needs_verification": result["needs_verification"],
+    }
