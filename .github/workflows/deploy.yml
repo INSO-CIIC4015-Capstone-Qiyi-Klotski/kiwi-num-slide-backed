@@ -56,13 +56,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "IMAGE_TAG=sha-${GITHUB_SHA::7}-$(date +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
-          echo "BUNDLE_KEY=dockerrun-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip" >> "$GITHUB_ENV"
-          # Derivar nombre de repo de ECR: parte después de la primera /
-          REPO_NAME=$(echo "$ECR_REPO_URI" | awk -F/ '{print $2}')
-          echo "REPO_NAME=${REPO_NAME}" >> "$GITHUB_ENV"
-          echo "Resolved REPO_NAME=${REPO_NAME}"
-          echo "Resolved IMAGE_TAG=${IMAGE_TAG}"
+          IMAGE_TAG="sha-$(echo "$GITHUB_SHA" | cut -c1-7)-$(date +%Y%m%d%H%M%S)"
+          BUNDLE_KEY="dockerrun-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip"
+          REPO_NAME="$(echo "$ECR_REPO_URI" | awk -F/ '{print $2}')"
+
+          # Exportar a GITHUB_ENV
+          {
+            echo "IMAGE_TAG=$IMAGE_TAG"
+            echo "BUNDLE_KEY=$BUNDLE_KEY"
+            echo "REPO_NAME=$REPO_NAME"
+          } >> "$GITHUB_ENV"
+
+          # Logs informativos (ya definidas en este shell)
+          echo "Resolved REPO_NAME=$REPO_NAME"
+          echo "Resolved IMAGE_TAG=$IMAGE_TAG"
 
       - name: Build Docker image
         run: |
