@@ -7,10 +7,10 @@ on:
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPO_URI: ${{ secrets.ECR_REPO_URI }}   # ej: 123456789012.dkr.ecr.us-east-2.amazonaws.com/three-tier-be
-  EB_APP_NAME: ${{ secrets.EB_APP_NAME }}     # ej: three-tier-be-app
-  EB_ENV_NAME: ${{ secrets.EB_ENV_NAME }}     # ej: three-tier-be-env
-  EB_S3_BUCKET: ${{ secrets.EB_S3_BUCKET }}   # ej: eb-app-bundles-123456789012-us-east-2
+  ECR_REPO_URI: ${{ secrets.ECR_REPO_URI }}
+  EB_APP_NAME: ${{ secrets.EB_APP_NAME }}
+  EB_ENV_NAME: ${{ secrets.EB_ENV_NAME }}
+  EB_S3_BUCKET: ${{ secrets.EB_S3_BUCKET }}
 
 jobs:
   build-and-deploy:
@@ -27,6 +27,27 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Sanity check ECR URI vs Region (reject public ECR)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "ECR_REPO_URI=$ECR_REPO_URI"
+          echo "AWS_REGION=$AWS_REGION"
+
+          if [[ "$ECR_REPO_URI" =~ ^public\.ecr\.aws ]]; then
+            echo "❌ ECR_REPO_URI apunta a ECR Public. Usa ECR privado: ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/REPO"
+            exit 1
+          fi
+
+          HOST_PART=$(echo "$ECR_REPO_URI" | awk -F/ '{print $1}')
+          EXPECTED_HOST_SUFFIX=".dkr.ecr.${AWS_REGION}.amazonaws.com"
+          if [[ "$HOST_PART" != *"$EXPECTED_HOST_SUFFIX" ]]; then
+            echo "❌ La región del host en ECR_REPO_URI no coincide con AWS_REGION."
+            echo "Host: $HOST_PART ; Esperado que termine en: $EXPECTED_HOST_SUFFIX"
+            exit 1
+          fi
+          echo "✅ Sanity check OK"
+
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -34,8 +55,14 @@ jobs:
         id: vars
         shell: bash
         run: |
-          echo "IMAGE_TAG=sha-${GITHUB_SHA::7}-$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
-          echo "BUNDLE_KEY=dockerrun-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip" >> $GITHUB_ENV
+          set -euo pipefail
+          echo "IMAGE_TAG=sha-${GITHUB_SHA::7}-$(date +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
+          echo "BUNDLE_KEY=dockerrun-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.zip" >> "$GITHUB_ENV"
+          # Derivar nombre de repo de ECR: parte después de la primera /
+          REPO_NAME=$(echo "$ECR_REPO_URI" | awk -F/ '{print $2}')
+          echo "REPO_NAME=${REPO_NAME}" >> "$GITHUB_ENV"
+          echo "Resolved REPO_NAME=${REPO_NAME}"
+          echo "Resolved IMAGE_TAG=${IMAGE_TAG}"
 
       - name: Build Docker image
         run: |
@@ -44,6 +71,24 @@ jobs:
       - name: Push image to ECR
         run: |
           docker push "$ECR_REPO_URI:$IMAGE_TAG"
+
+      - name: Verify image exists in ECR and capture digest
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          DIGEST=$(aws ecr describe-images \
+            --repository-name "$REPO_NAME" \
+            --image-ids imageTag="$IMAGE_TAG" \
+            --region "$AWS_REGION" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+          if [[ "$DIGEST" == "None" || -z "$DIGEST" ]]; then
+            echo "❌ No se encontró la imagen con tag $IMAGE_TAG en $REPO_NAME"
+            exit 1
+          fi
+          echo "DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          echo "✅ Imagen verificada en ECR. Digest: $DIGEST"
 
       - name: Create Dockerrun.aws.json (single container)
         shell: bash
@@ -61,6 +106,7 @@ jobs:
             "Logging": "/var/log/app"
           }
           EOF
+          echo "==== Dockerrun.aws.json ===="
           cat Dockerrun.aws.json
 
       - name: Zip bundle
@@ -74,6 +120,7 @@ jobs:
           aws elasticbeanstalk create-application-version \
             --application-name "$EB_APP_NAME" \
             --version-label "$IMAGE_TAG" \
+            --description "Git:${GITHUB_SHA::7} Digest:${DIGEST} Repo:${ECR_REPO_URI}" \
             --source-bundle S3Bucket="$EB_S3_BUCKET",S3Key="$BUNDLE_KEY" \
             --process
 
@@ -82,20 +129,18 @@ jobs:
           aws elasticbeanstalk update-environment \
             --environment-name "$EB_ENV_NAME" \
             --version-label "$IMAGE_TAG"
-      
-      - name: Monitor EB Events
+
+      - name: Monitor EB Events (wait for Ready+OK/Green)
         shell: bash
         run: |
           echo "Esperando a que el ambiente alcance estado Ready + (Green/Ok)..."
           end=$((SECONDS+1800))  # 30 min
-
           while [ $SECONDS -lt $end ]; do
-            # Muestra sólo los mensajes de eventos recientes (opcional; quita si prefieres tabla)
             aws elasticbeanstalk describe-events \
               --environment-name "$EB_ENV_NAME" \
               --region "$AWS_REGION" \
               --max-items 5 \
-              --output table
+              --output table || true
 
             read -r ENV_STATUS HEALTH HEALTH_STATUS VERSION <<<"$(aws elasticbeanstalk describe-environments \
               --environment-names "$EB_ENV_NAME" \
@@ -103,15 +148,13 @@ jobs:
               --query 'Environments[0].[Status,Health,HealthStatus,VersionLabel]' \
               --output text)"
 
-            echo "Estado actual: Status=$ENV_STATUS | Health=$HEALTH | HealthStatus=$HEALTH_STATUS"
+            echo "Estado actual: Status=$ENV_STATUS | Health=$HEALTH | HealthStatus=$HEALTH_STATUS | Version=$VERSION"
 
             if [[ "$ENV_STATUS" == "Ready" && ( "$HEALTH" == "Green" || "$HEALTH_STATUS" == "Ok" ) ]]; then
               echo "✅ Ambiente listo: Ready + ${HEALTH}/${HEALTH_STATUS}"
               exit 0
             fi
-
             sleep 30
           done
-
           echo "⏰ Timeout esperando Ready + (Green/Ok)"
           exit 1
