@@ -21,3 +21,18 @@ def get_user_by_email(email: str) -> dict | None:
     with get_conn() as conn:
         row = conn.execute(sql, {"email": email}).mappings().first()
     return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    sql = text("""
+        SELECT id, name, email, password_hash, is_verified, avatar_key
+        FROM users WHERE id = :id
+    """)
+    with get_conn() as conn:
+        row = conn.execute(sql, {"id": user_id}).mappings().first()
+    return dict(row) if row else None
+
+
+def mark_verified(user_id: int):
+    with get_tx() as conn:
+        conn.execute(text("UPDATE users SET is_verified = TRUE WHERE id = :id"), {"id": user_id})
