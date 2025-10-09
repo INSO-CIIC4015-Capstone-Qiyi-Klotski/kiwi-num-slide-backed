@@ -1,6 +1,7 @@
 import os
 from urllib.parse import urlencode
 
+import jwt
 from botocore.exceptions import ClientError
 from fastapi import HTTPException, status
 from passlib.hash import bcrypt
@@ -82,8 +83,14 @@ def login_user(email: str, password: str):
         email=user["email"]
     )
 
+    refresh_token = security.create_refresh_token(
+        user_id=user["id"],
+        email=user["email"]
+    )
+
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "user": {
             "id": user["id"],
             "name": user["name"],
@@ -92,3 +99,26 @@ def login_user(email: str, password: str):
         },
         "needs_verification": not bool(user["is_verified"]),
     }
+
+
+def refresh_access_token(refresh_token: str):
+    try:
+        data = security.decode_token(refresh_token)
+        security.require_token_type(data, "refresh")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    email = data.get("email")
+    if not email:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token payload")
+
+    user = users_repo.get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    new_access = security.create_access_token(user_id=user["id"], email=user["email"])
+
+
+    return {"access_token": new_access, "refresh_token": None}

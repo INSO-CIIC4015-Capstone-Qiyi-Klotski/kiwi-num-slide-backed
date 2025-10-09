@@ -35,7 +35,18 @@ class VerifyOut(BaseModel):
 
 class LoginOut(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user: UserOut
     needs_verification: bool
 
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str
+
+
+class RefreshOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    refresh_token: str | None = None  # si luego rotas el refresh

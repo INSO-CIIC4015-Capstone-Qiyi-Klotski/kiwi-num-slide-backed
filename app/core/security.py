@@ -3,18 +3,22 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
+from starlette import status
 
 # === Config ===
 JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-prod")
 JWT_ALG = "HS256"
 
 
-ACCESS_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "60"))
+ACCESS_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "1"))
 REFRESH_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+_http_bearer = HTTPBearer(auto_error=False)
 
 # === Core ===
 def _now_utc() -> datetime:
@@ -97,3 +101,21 @@ def get_password_hash(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica si el password en texto plano coincide con el hash."""
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_current_token(
+    creds: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
+) -> dict:
+    """Valida Authorization: Bearer <access_token> y devuelve los claims."""
+    if creds is None or not creds.credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+
+    token = creds.credentials
+    try:
+        data = decode_token(token)
+        require_token_type(data, "access")
+        return data
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
