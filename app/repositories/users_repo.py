@@ -36,3 +36,15 @@ def get_user_by_id(user_id: int) -> dict | None:
 def mark_verified(user_id: int):
     with get_tx() as conn:
         conn.execute(text("UPDATE users SET is_verified = TRUE WHERE id = :id"), {"id": user_id})
+
+
+def list_ssg_seed(limit: int = 200):
+    sql = text("""
+        SELECT id, name
+        FROM users
+        ORDER BY id
+        LIMIT :limit
+    """)
+    with get_conn() as conn:
+        rows = conn.execute(sql, {"limit": limit}).mappings().all()
+    return [dict(r) for r in rows]
