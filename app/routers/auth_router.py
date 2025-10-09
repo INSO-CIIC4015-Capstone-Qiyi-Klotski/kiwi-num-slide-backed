@@ -3,7 +3,8 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from ..core import security
 from ..repositories import users_repo
-from ..schemas.auth_schema import RegisterIn, UserOut, VerifyEmailIn, LoginOut, LoginIn, RefreshOut, RefreshIn
+from ..schemas.auth_schema import RegisterIn, UserOut, VerifyEmailIn, LoginOut, LoginIn, RefreshOut, RefreshIn, \
+    StatusOut
 from ..services import auth_service
 from fastapi import Query
 
@@ -80,4 +81,29 @@ def read_me(token_data: dict = Depends(security.get_current_token)):
         "name": user["name"],
         "email": user["email"],
         "is_verified": bool(user["is_verified"]),
+    }
+
+
+@router.get("/status", response_model=StatusOut)
+def auth_status(token_data: dict | None = Depends(security.get_current_token_optional)):
+    """
+    Si hay access token válido -> devuelve { verified, user } desde la DB.
+    Si no hay token (o inválido/expirado) -> { verified: False, user: None }.
+    """
+    if not token_data:
+        return {"verified": False, "user": None}
+
+    user_id = int(token_data["sub"])
+    user = users_repo.get_user_by_id(user_id)
+    if not user:
+        return {"verified": False, "user": None}
+
+    return {
+        "verified": bool(user["is_verified"]),
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "is_verified": bool(user["is_verified"]),
+        },
     }

@@ -119,3 +119,21 @@ def get_current_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+def get_current_token_optional(
+    creds: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
+) -> dict | None:
+    """
+    Intenta leer y validar Authorization: Bearer <access_token>.
+    Si no hay token o es inválido/expirado, devuelve None (no levanta 401).
+    """
+    if not creds or not creds.credentials:
+        return None
+    token = creds.credentials
+    try:
+        data = decode_token(token)
+        require_token_type(data, "access")
+        return data
+    except Exception:
+        return None

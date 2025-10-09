@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -50,3 +52,8 @@ class RefreshOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     refresh_token: str | None = None  # si luego rotas el refresh
+
+
+class StatusOut(BaseModel):
+    verified: bool
+    user: Optional[UserOut] = None
