@@ -85,3 +85,14 @@ def get_my_following(
 ):
     current_user_id = int(token["sub"])
     return user_service.list_my_following(current_user_id, limit=limit, cursor=cursor)
+
+
+
+@router.get("/me/followers", response_model=FollowingPage)
+def get_my_followers(
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+    token = Depends(get_current_token),
+):
+    current_user_id = int(token["sub"])
+    return user_service.list_my_followers(current_user_id, limit=limit, cursor=cursor)

@@ -208,3 +208,34 @@ def list_following(follower_id: int, limit: int, cursor: Optional[int]) -> list[
 
     return [dict(r) for r in rows]
 
+
+
+def list_followers(followee_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
+    """
+    Devuelve hasta `limit + 1` filas para detectar next page.
+    Retorna:
+      - follow_id, follow_created_at
+      - user_id (el follower), user_name, user_avatar_key
+    """
+    base_sql = """
+        SELECT
+            f.id AS follow_id,
+            f.created_at AS follow_created_at,
+            u.id AS user_id,
+            u.name AS user_name,
+            u.avatar_key AS user_avatar_key
+        FROM follows f
+        JOIN users u ON u.id = f.follower_id
+        WHERE f.followee_id = :followee_id
+    """
+    params = {"followee_id": followee_id, "limit": limit + 1}
+    if cursor:
+        base_sql += " AND f.id < :cursor"
+        params["cursor"] = cursor
+
+    base_sql += " ORDER BY f.id DESC LIMIT :limit"
+
+    with get_conn() as conn:
+        rows = conn.execute(text(base_sql), params).mappings().all()
+
+    return [dict(r) for r in rows]
