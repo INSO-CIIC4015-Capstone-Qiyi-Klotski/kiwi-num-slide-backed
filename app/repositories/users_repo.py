@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy import text
 from ..db import get_tx, get_conn
 
@@ -119,3 +121,22 @@ def get_private_user_with_stats(user_id: int) -> dict | None:
     with get_conn() as conn:
         row = conn.execute(sql, {"id": user_id}).mappings().first()
     return dict(row) if row else None
+
+
+
+def update_user_profile(user_id: int, name: Optional[str], avatar_key: Optional[str]) -> bool:
+    sets, params = [], {"id": user_id}
+    if name is not None:
+        sets.append("name = :name")
+        params["name"] = name
+    if avatar_key is not None:
+        sets.append("avatar_key = :avatar_key")
+        params["avatar_key"] = avatar_key
+    if not sets:
+        return False  # nada que actualizar
+
+    sql = text(f"UPDATE users SET {', '.join(sets)} WHERE id = :id")
+    with get_tx() as conn:
+        result = conn.execute(sql, params)
+        # En SQLAlchemy 2.x, rowcount puede ser -1 con algunos drivers; si pasa, asumimos True
+        return (result.rowcount is None) or (result.rowcount < 0) or (result.rowcount > 0)

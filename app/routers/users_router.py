@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Query, Path, HTTPException, Depends
 from fastapi.openapi.models import Response
+from starlette import status
 
 from app.core.security import get_current_token
-from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile
+from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -23,6 +24,20 @@ def get_me(token=Depends(get_current_token)):
         raise HTTPException(status_code=404, detail="User not found")
     # Importante: perfil propio es privado → NO cache público
     return data
+
+
+@router.patch("/me", response_model=UpdateAck, status_code=200)
+def patch_me(payload: UpdateMyProfile, token=Depends(get_current_token)):
+    if payload.name is None and payload.avatar_key is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Provide at least one of: name, avatar_key")
+
+    user_id = int(token["sub"])
+    return user_service.patch_my_profile(
+        user_id,
+        name=payload.name,
+        avatar_key=payload.avatar_key,
+    )
 
 
 @router.get("/{user_id}", response_model=PublicUser)

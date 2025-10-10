@@ -3,10 +3,15 @@ import re
 from typing import Optional
 
 import unicodedata
+import requests
+from fastapi import HTTPException
+from starlette import status
 
 from app.repositories import users_repo
 
 AVATAR_CDN_BASE = os.getenv("AVATAR_CDN_BASE", "").rstrip("/")
+REVALIDATE_SECRET = os.getenv("REVALIDATE_SECRET")
+REVALIDATE_URL = os.getenv("REVALIDATE_URL")
 
 def _slugify(value: str) -> str:
     # Normaliza acentos y convierte a ASCII
@@ -69,3 +74,26 @@ def get_my_profile(user_id: int) -> dict | None:
             "followers": row["followers_count"],
         },
     }
+
+
+
+def patch_my_profile(user_id: int, name: str | None, avatar_key: str | None) -> dict:
+    if name is None and avatar_key is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Provide at least one of: name, avatar_key")
+
+    changed = users_repo.update_user_profile(user_id, name=name, avatar_key=avatar_key)
+
+    if changed and REVALIDATE_URL and REVALIDATE_SECRET:
+        try:
+            paths = []
+            if name:
+                paths.append(f"/u/{user_id}-{_slugify(name)}")
+            if paths:
+                requests.post(REVALIDATE_URL,
+                              json={"secret": REVALIDATE_SECRET, "paths": paths},
+                              timeout=3)
+        except Exception as e:
+            print(f"[WARN] Revalidate request failed: {e}")
+
+    return {"ok": True, "changed": bool(changed)}

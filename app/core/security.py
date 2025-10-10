@@ -13,7 +13,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-prod")
 JWT_ALG = "HS256"
 
 
-ACCESS_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "1"))
+ACCESS_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "15"))
 REFRESH_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
