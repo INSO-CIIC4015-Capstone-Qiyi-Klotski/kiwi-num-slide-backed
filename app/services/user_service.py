@@ -48,3 +48,24 @@ def get_public_profile(user_id: int) -> dict | None:
             "followers": row["followers_count"],
         },
     }
+
+
+def get_my_profile(user_id: int) -> dict | None:
+    row = users_repo.get_private_user_with_stats(user_id)
+    if not row:
+        return None
+    slug = _slugify(row["name"])
+    return {
+        "id": row["id"],
+        "slug": slug,
+        "display_name": row["name"],
+        "email": row["email"],
+        "avatar_key": row.get("avatar_key"),
+        "avatar_url": _build_avatar_url(row.get("avatar_key")),
+        "created_at": row["created_at"].isoformat(),
+        "stats": {
+            "puzzles": row["puzzles_count"],
+            "likes_received": row["likes_received"],
+            "followers": row["followers_count"],
+        },
+    }

@@ -26,3 +26,7 @@ class PublicUser(BaseModel):
     avatar_url: Optional[str] = None  # si tienes CDN, se arma en service
     created_at: str
     stats: PublicUserStats
+
+
+class MyProfile(PublicUser):
+    email: str
