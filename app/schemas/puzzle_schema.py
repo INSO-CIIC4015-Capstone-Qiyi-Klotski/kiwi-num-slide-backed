@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from pydantic import BaseModel, Field, validator, field_validator
 
 
@@ -27,3 +27,13 @@ class PuzzleOut(BaseModel):
     difficulty: Optional[int] = None
     num_solutions: Optional[int] = None
     created_at: str
+
+
+
+class PuzzlesSSGSeedItem(BaseModel):
+    id: int
+    tag: str  # slug del título
+
+class PuzzlesSSGSeedResponse(BaseModel):
+    items: List[PuzzlesSSGSeedItem]
+    count: int

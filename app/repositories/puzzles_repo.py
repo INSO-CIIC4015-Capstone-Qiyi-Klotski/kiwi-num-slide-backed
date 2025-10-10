@@ -2,7 +2,8 @@ from typing import Optional, Dict, Any
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import JSONB
 
-from ..db import get_tx
+from ..db import get_tx, get_conn
+
 
 def insert_puzzle(
     *, author_id: int, title: str, size: int,
@@ -28,3 +29,16 @@ def insert_puzzle(
         }).mappings().first()
 
     return dict(row)
+
+
+
+def list_puzzles_ssg_seed(limit: int = 200) -> list[dict]:
+    sql = text("""
+        SELECT id, title
+        FROM puzzles
+        ORDER BY id
+        LIMIT :limit
+    """)
+    with get_conn() as conn:
+        rows = conn.execute(sql, {"limit": limit}).mappings().all()
+    return [dict(r) for r in rows]
