@@ -61,3 +61,13 @@ def follow_user(
 ):
     follower_id = int(token["sub"])
     return user_service.follow_user(follower_id, user_id)
+
+
+
+@router.delete("/{user_id}/follow", response_model=FollowAck)
+def unfollow_user(
+    user_id: int = Path(..., ge=1),
+    token=Depends(get_current_token),
+):
+    follower_id = int(token["sub"])
+    return user_service.unfollow_user(follower_id, user_id)

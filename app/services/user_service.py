@@ -113,3 +113,18 @@ def follow_user(current_user_id: int, target_user_id: int) -> dict:
     changed = users_repo.create_follow(current_user_id, target_user_id)
 
     return {"ok": True, "changed": bool(changed)}
+
+
+def unfollow_user(current_user_id: int, target_user_id: int) -> dict:
+    # No puedes dejar de seguirte a ti mismo
+    if current_user_id == target_user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot unfollow yourself")
+
+    # Verifica que el target exista
+    if not users_repo.user_exists(target_user_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Intenta eliminar el follow (idempotente)
+    changed = users_repo.delete_follow(current_user_id, target_user_id)
+
+    return {"ok": True, "changed": bool(changed)}

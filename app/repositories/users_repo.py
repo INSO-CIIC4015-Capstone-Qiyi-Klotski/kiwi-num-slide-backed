@@ -164,3 +164,18 @@ def create_follow(follower_id: int, followee_id: int) -> bool:
     return row is not None
 
 
+def delete_follow(follower_id: int, followee_id: int) -> bool:
+    """
+    Elimina el follow si existe.
+    Devuelve True si se borró, False si no existía (idempotente).
+    """
+    sql = text("""
+        DELETE FROM follows
+        WHERE follower_id = :follower_id AND followee_id = :followee_id
+        RETURNING id;
+    """)
+    with get_tx() as conn:
+        row = conn.execute(sql, {"follower_id": follower_id, "followee_id": followee_id}).first()
+    return row is not None
+
+
