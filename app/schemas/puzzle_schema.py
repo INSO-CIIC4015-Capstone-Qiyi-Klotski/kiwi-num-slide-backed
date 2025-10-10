@@ -28,6 +28,7 @@ class PuzzleOut(BaseModel):
     num_solutions: Optional[int] = None
     created_at: str
 
+    author: Optional[Dict[str, Any]] = None  # { id, slug, display_name, avatar_key, avatar_url }
 
 
 class PuzzlesSSGSeedItem(BaseModel):
@@ -37,3 +38,4 @@ class PuzzlesSSGSeedItem(BaseModel):
 class PuzzlesSSGSeedResponse(BaseModel):
     items: List[PuzzlesSSGSeedItem]
     count: int
+

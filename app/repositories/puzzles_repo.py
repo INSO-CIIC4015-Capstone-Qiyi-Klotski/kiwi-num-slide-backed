@@ -42,3 +42,25 @@ def list_puzzles_ssg_seed(limit: int = 200) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(sql, {"limit": limit}).mappings().all()
     return [dict(r) for r in rows]
+
+
+def get_puzzle_by_id(puzzle_id: int) -> dict | None:
+    sql = text("""
+        SELECT
+            p.id,
+            p.author_id,
+            p.title,
+            p.size,
+            p.board_spec,
+            p.num_solutions,
+            p.difficulty,
+            p.created_at,
+            u.name  AS author_name,
+            u.avatar_key AS author_avatar_key
+        FROM puzzles p
+        LEFT JOIN users u ON u.id = p.author_id
+        WHERE p.id = :puzzle_id
+    """)
+    with get_conn() as conn:
+        row = conn.execute(sql, {"puzzle_id": puzzle_id}).mappings().first()
+    return dict(row) if row else None
