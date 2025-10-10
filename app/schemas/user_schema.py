@@ -41,6 +41,13 @@ class UpdateMyProfile(BaseModel):
         if self.name is None and self.avatar_key is None:
             raise ValueError("At least one field (name or avatar_key) must be provided.")
 
+
 class UpdateAck(BaseModel):
+    ok: bool
+    changed: bool
+
+
+
+class FollowAck(BaseModel):
     ok: bool
     changed: bool

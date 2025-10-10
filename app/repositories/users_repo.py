@@ -140,3 +140,27 @@ def update_user_profile(user_id: int, name: Optional[str], avatar_key: Optional[
         result = conn.execute(sql, params)
         # En SQLAlchemy 2.x, rowcount puede ser -1 con algunos drivers; si pasa, asumimos True
         return (result.rowcount is None) or (result.rowcount < 0) or (result.rowcount > 0)
+
+
+
+def user_exists(user_id: int) -> bool:
+    sql = text("SELECT 1 FROM users WHERE id = :id")
+    with get_conn() as conn:
+        row = conn.execute(sql, {"id": user_id}).first()
+    return row is not None
+
+def create_follow(follower_id: int, followee_id: int) -> bool:
+    """
+    Crea el follow si no existe. Devuelve True si se insertó, False si ya existía.
+    """
+    sql = text("""
+        INSERT INTO follows (follower_id, followee_id)
+        VALUES (:follower_id, :followee_id)
+        ON CONFLICT (follower_id, followee_id) DO NOTHING
+        RETURNING id;
+    """)
+    with get_tx() as conn:
+        row = conn.execute(sql, {"follower_id": follower_id, "followee_id": followee_id}).first()
+    return row is not None
+
+

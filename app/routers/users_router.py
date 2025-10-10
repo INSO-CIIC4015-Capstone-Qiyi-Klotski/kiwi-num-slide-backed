@@ -3,7 +3,7 @@ from fastapi.openapi.models import Response
 from starlette import status
 
 from app.core.security import get_current_token
-from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile
+from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -54,3 +54,10 @@ def get_user_public_profile(
     return data
 
 
+@router.post("/{user_id}/follow", response_model=FollowAck)
+def follow_user(
+    user_id: int = Path(..., ge=1),
+    token=Depends(get_current_token),
+):
+    follower_id = int(token["sub"])
+    return user_service.follow_user(follower_id, user_id)
