@@ -1,9 +1,12 @@
+from typing import Optional
+
 from fastapi import APIRouter, Query, Path, HTTPException, Depends
 from fastapi.openapi.models import Response
 from starlette import status
 
 from app.core.security import get_current_token
-from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck
+from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck, \
+    FollowingPage
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -71,3 +74,14 @@ def unfollow_user(
 ):
     follower_id = int(token["sub"])
     return user_service.unfollow_user(follower_id, user_id)
+
+
+
+@router.get("/me/following", response_model=FollowingPage)
+def get_my_following(
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+    token = Depends(get_current_token),
+):
+    current_user_id = int(token["sub"])
+    return user_service.list_my_following(current_user_id, limit=limit, cursor=cursor)

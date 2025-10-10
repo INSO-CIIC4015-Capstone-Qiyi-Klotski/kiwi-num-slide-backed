@@ -128,3 +128,30 @@ def unfollow_user(current_user_id: int, target_user_id: int) -> dict:
     changed = users_repo.delete_follow(current_user_id, target_user_id)
 
     return {"ok": True, "changed": bool(changed)}
+
+
+
+def list_my_following(current_user_id: int, limit: int, cursor: Optional[str]) -> dict:
+    # Normaliza cursor (id de follows)
+    cursor_id: Optional[int] = int(cursor) if cursor else None
+
+    rows = users_repo.list_following(current_user_id, limit=limit, cursor=cursor_id)
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    items = []
+    for r in rows:
+        slug = _slugify(r["user_name"])
+        items.append({
+            "id": r["user_id"],
+            "slug": slug,
+            "display_name": r["user_name"],
+            "avatar_key": r.get("user_avatar_key"),
+            "avatar_url": _build_avatar_url(r.get("user_avatar_key")),
+            "since": r["follow_created_at"].isoformat(),
+        })
+
+    next_cursor = str(rows[-1]["follow_id"]) if has_more and rows else None
+
+    return {"items": items, "next_cursor": next_cursor}

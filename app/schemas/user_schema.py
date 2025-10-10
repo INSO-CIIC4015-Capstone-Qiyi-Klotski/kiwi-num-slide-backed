@@ -51,3 +51,17 @@ class UpdateAck(BaseModel):
 class FollowAck(BaseModel):
     ok: bool
     changed: bool
+
+
+
+class FollowingUserItem(BaseModel):
+    id: int
+    slug: str
+    display_name: str
+    avatar_key: Optional[str] = None
+    avatar_url: Optional[str] = None
+    since: str  # fecha en la que empezaste a seguir (ISO)
+
+class FollowingPage(BaseModel):
+    items: List[FollowingUserItem]
+    next_cursor: Optional[str] = None  # cursor opaco (id de follows)

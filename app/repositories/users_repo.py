@@ -179,3 +179,32 @@ def delete_follow(follower_id: int, followee_id: int) -> bool:
     return row is not None
 
 
+
+def list_following(follower_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
+    """
+    Devuelve hasta `limit + 1` filas para detectar si hay siguiente página.
+    Campos: follow_id, follow_created_at, user.*
+    """
+    base_sql = """
+        SELECT
+            f.id AS follow_id,
+            f.created_at AS follow_created_at,
+            u.id AS user_id,
+            u.name AS user_name,
+            u.avatar_key AS user_avatar_key
+        FROM follows f
+        JOIN users u ON u.id = f.followee_id
+        WHERE f.follower_id = :follower_id
+    """
+    params = {"follower_id": follower_id, "limit": limit + 1}
+    if cursor:
+        base_sql += " AND f.id < :cursor"
+        params["cursor"] = cursor
+
+    base_sql += " ORDER BY f.id DESC LIMIT :limit"
+
+    with get_conn() as conn:
+        rows = conn.execute(text(base_sql), params).mappings().all()
+
+    return [dict(r) for r in rows]
+
