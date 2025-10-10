@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth_router, health_router, users_router
+from app.routers import auth_router, health_router, users_router, puzzles_router
 
 app = FastAPI(title="three-tier BE")
 
@@ -23,3 +23,4 @@ app.add_middleware(
 app.include_router(health_router)  # primero, para el health check
 app.include_router(auth_router)
 app.include_router(users_router.router)
+app.include_router(puzzles_router.router)
