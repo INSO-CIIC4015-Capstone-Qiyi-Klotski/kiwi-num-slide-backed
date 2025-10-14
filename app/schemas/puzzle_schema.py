@@ -39,3 +39,22 @@ class PuzzlesSSGSeedResponse(BaseModel):
     items: List[PuzzlesSSGSeedItem]
     count: int
 
+
+
+class PuzzleUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    size: Optional[int] = Field(None, ge=1, le=10)
+    board_spec: Optional[Dict[str, Any]] = None
+    difficulty: Optional[int] = Field(None, ge=1, le=5)
+    num_solutions: Optional[int] = Field(None, ge=0)
+
+    @field_validator("board_spec")
+    @classmethod
+    def board_spec_if_present_must_be_object(cls, v):
+        if v is not None and not isinstance(v, dict):
+            raise ValueError("board_spec debe ser un objeto JSON")
+        return v
+
+class PuzzleUpdateAck(BaseModel):
+    ok: bool
+    changed: bool

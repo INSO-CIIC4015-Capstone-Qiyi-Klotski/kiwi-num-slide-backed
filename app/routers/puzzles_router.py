@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException
 from app.core.security import get_current_token
-from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse
+from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate
 from app.services import puzzle_service
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
@@ -37,3 +37,21 @@ def get_puzzle(puzzle_id: int = Path(..., ge=1), response: Response = None):
     if response is not None:
         response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=60"
     return data
+
+
+@router.patch("/{puzzle_id}", response_model=PuzzleUpdateAck)
+def patch_puzzle(
+    puzzle_id: int = Path(..., ge=1),
+    payload: PuzzleUpdate = None,
+    token = Depends(get_current_token),
+):
+    current_user_id = int(token["sub"])
+    return puzzle_service.patch_puzzle(
+        current_user_id=current_user_id,
+        puzzle_id=puzzle_id,
+        title=payload.title,
+        size=payload.size,
+        board_spec=payload.board_spec,
+        difficulty=payload.difficulty,
+        num_solutions=payload.num_solutions,
+    )

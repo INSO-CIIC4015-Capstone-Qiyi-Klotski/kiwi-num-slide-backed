@@ -64,3 +64,57 @@ def get_puzzle_by_id(puzzle_id: int) -> dict | None:
     with get_conn() as conn:
         row = conn.execute(sql, {"puzzle_id": puzzle_id}).mappings().first()
     return dict(row) if row else None
+
+
+
+def get_puzzle_author_id(puzzle_id: int) -> Optional[int]:
+    sql = text("SELECT author_id FROM puzzles WHERE id = :id")
+    with get_conn() as conn:
+        row = conn.execute(sql, {"id": puzzle_id}).first()
+    return None if not row else row[0]
+
+def update_puzzle_owned(
+    *, puzzle_id: int, author_id: int,
+    title: Optional[str], size: Optional[int],
+    board_spec: Optional[Dict[str, Any]],
+    difficulty: Optional[int], num_solutions: Optional[int],
+) -> Optional[dict]:
+    """
+    Actualiza solo si el puzzle pertenece a 'author_id'.
+    Devuelve la fila actualizada con campos mínimos (o None si no coincidió).
+    """
+    sets = []
+    params: Dict[str, Any] = {"id": puzzle_id, "author_id": author_id}
+
+    if title is not None:
+        sets.append("title = :title")
+        params["title"] = title
+    if size is not None:
+        sets.append("size = :size")
+        params["size"] = size
+    if board_spec is not None:
+        sets.append("board_spec = :board_spec")
+        params["board_spec"] = board_spec
+    if difficulty is not None:
+        sets.append("difficulty = :difficulty")
+        params["difficulty"] = difficulty
+    if num_solutions is not None:
+        sets.append("num_solutions = :num_solutions")
+        params["num_solutions"] = num_solutions
+
+    if not sets:
+        return None  # nada que actualizar
+
+    sql = text(f"""
+        UPDATE puzzles
+        SET {', '.join(sets)}
+        WHERE id = :id AND author_id = :author_id
+        RETURNING id, author_id, title
+    """)
+    # tipa JSONB si corresponde
+    if board_spec is not None:
+        sql = sql.bindparams(bindparam("board_spec", type_=JSONB))
+
+    with get_tx() as conn:
+        row = conn.execute(sql, params).mappings().first()
+    return None if not row else dict(row)
