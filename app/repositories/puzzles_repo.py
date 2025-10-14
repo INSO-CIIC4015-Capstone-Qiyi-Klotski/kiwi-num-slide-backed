@@ -118,3 +118,23 @@ def update_puzzle_owned(
     with get_tx() as conn:
         row = conn.execute(sql, params).mappings().first()
     return None if not row else dict(row)
+
+
+def puzzle_has_daily_reference(puzzle_id: int) -> bool:
+    sql = text("SELECT 1 FROM daily_puzzles WHERE puzzle_id = :pid LIMIT 1")
+    with get_conn() as conn:
+        row = conn.execute(sql, {"pid": puzzle_id}).first()
+    return row is not None
+
+def delete_puzzle_owned(puzzle_id: int, author_id: int) -> bool:
+    """
+    Borra el puzzle si pertenece al author_id. Devuelve True si eliminó 1 fila.
+    """
+    sql = text("""
+        DELETE FROM puzzles
+        WHERE id = :id AND author_id = :author_id
+        RETURNING id
+    """)
+    with get_tx() as conn:
+        row = conn.execute(sql, {"id": puzzle_id, "author_id": author_id}).first()
+    return row is not None

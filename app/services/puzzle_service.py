@@ -128,3 +128,44 @@ def patch_puzzle(
             print(f"[WARN] Revalidate request failed: {e}")
 
     return {"ok": True, "changed": changed}
+
+
+
+
+def delete_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
+    # 1) Existe y autor correcto
+    owner = puzzles_repo.get_puzzle_author_id(puzzle_id)
+    if owner is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+    if owner != current_user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the author")
+
+    # 2) Lee el título/slug ANTES de borrar, para invalidar la ruta exacta
+    row = puzzles_repo.get_puzzle_by_id(puzzle_id)
+    if not row:
+        # raro: existía para author_id pero no al leer; tratamos como 404
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+
+    title = row.get("title") or "puzzle"
+    slug = _slugify(title)
+    path_to_invalidate = f"/p/{puzzle_id}-{slug}"
+
+    # 3) Bloqueo por daily_puzzles
+    if puzzles_repo.puzzle_has_daily_reference(puzzle_id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Puzzle is referenced by daily_puzzles")
+
+    # 4) Borrar
+    deleted = puzzles_repo.delete_puzzle_owned(puzzle_id, current_user_id)
+
+    # 5) Revalidate: invalidar la ruta pública exacta del puzzle
+    if deleted and REVALIDATE_URL and REVALIDATE_SECRET:
+        try:
+            requests.post(
+                REVALIDATE_URL,
+                json={"secret": REVALIDATE_SECRET, "paths": [path_to_invalidate]},
+                timeout=3,
+            )
+        except Exception as e:
+            print(f"[WARN] Revalidate request failed: {e}")
+
+    return {"ok": True, "deleted": bool(deleted)}

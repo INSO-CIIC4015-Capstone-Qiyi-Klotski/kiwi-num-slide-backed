@@ -58,3 +58,9 @@ class PuzzleUpdate(BaseModel):
 class PuzzleUpdateAck(BaseModel):
     ok: bool
     changed: bool
+
+
+
+class PuzzleDeleteAck(BaseModel):
+    ok: bool
+    deleted: bool
