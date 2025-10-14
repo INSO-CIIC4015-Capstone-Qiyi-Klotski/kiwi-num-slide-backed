@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException
 from app.core.security import get_current_token
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
-    PuzzleDeleteAck, PuzzleListPage, LikeAck
+    PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount
 from app.services import puzzle_service
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
@@ -108,3 +108,15 @@ def unlike_puzzle(
 ):
     user_id = int(token["sub"])
     return puzzle_service.unlike_puzzle(current_user_id=user_id, puzzle_id=puzzle_id)
+
+
+@router.get("/{puzzle_id}/likes/count", response_model=LikeCount)
+def get_puzzle_likes_count(
+    puzzle_id: int = Path(..., ge=1),
+    response: Response = None,
+):
+    data = puzzle_service.get_puzzle_like_count(puzzle_id)
+    if response is not None:
+        # ISR-safe: cache público en edge/CDN
+        response.headers["Cache-Control"] = "public, s-maxage=120, stale-while-revalidate=60"
+    return data

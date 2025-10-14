@@ -83,3 +83,7 @@ class PuzzleListPage(BaseModel):
 class LikeAck(BaseModel):
     ok: bool
     changed: bool  # True si se creó el like; False si ya existía (idempotente)
+
+
+class LikeCount(BaseModel):
+    count: int

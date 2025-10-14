@@ -227,3 +227,9 @@ def unlike_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
 
     changed = puzzles_repo.delete_puzzle_like(current_user_id, puzzle_id)
     return {"ok": True, "changed": bool(changed)}
+
+
+def get_puzzle_like_count(puzzle_id: int) -> dict:
+    if not puzzles_repo.puzzle_exists(puzzle_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+    return {"count": puzzles_repo.count_puzzle_likes(puzzle_id)}

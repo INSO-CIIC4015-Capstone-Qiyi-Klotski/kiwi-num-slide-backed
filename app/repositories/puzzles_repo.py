@@ -219,3 +219,10 @@ def delete_puzzle_like(user_id: int, puzzle_id: int) -> bool:
     with get_tx() as conn:
         row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
     return row is not None
+
+
+def count_puzzle_likes(puzzle_id: int) -> int:
+    sql = text("SELECT COUNT(*) AS c FROM puzzle_likes WHERE puzzle_id = :pid")
+    with get_conn() as conn:
+        row = conn.execute(sql, {"pid": puzzle_id}).mappings().first()
+    return int(row["c"]) if row else 0
