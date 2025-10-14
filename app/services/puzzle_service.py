@@ -210,3 +210,12 @@ def browse_puzzles_public(
 
     next_cursor = str(rows[-1]["id"]) if has_more and rows else None
     return {"items": items, "next_cursor": next_cursor}
+
+
+
+def like_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
+    if not puzzles_repo.puzzle_exists(puzzle_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+
+    changed = puzzles_repo.create_puzzle_like(current_user_id, puzzle_id)
+    return {"ok": True, "changed": bool(changed)}

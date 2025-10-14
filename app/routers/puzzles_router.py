@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException
 from app.core.security import get_current_token
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
-    PuzzleDeleteAck, PuzzleListPage
+    PuzzleDeleteAck, PuzzleListPage, LikeAck
 from app.services import puzzle_service
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
@@ -89,3 +89,13 @@ def browse_puzzles(
     # Cache amigable para SSR/CSR
     response.headers["Cache-Control"] = "public, s-maxage=120, stale-while-revalidate=60"
     return data
+
+
+
+@router.post("/{puzzle_id}/like", response_model=LikeAck)
+def like_puzzle(
+    puzzle_id: int = Path(..., ge=1),
+    token = Depends(get_current_token),
+):
+    user_id = int(token["sub"])
+    return puzzle_service.like_puzzle(current_user_id=user_id, puzzle_id=puzzle_id)

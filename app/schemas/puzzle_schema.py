@@ -78,3 +78,8 @@ class PuzzleListItem(BaseModel):
 class PuzzleListPage(BaseModel):
     items: List[PuzzleListItem]
     next_cursor: Optional[str] = None  # último id de la página (opaco)
+
+
+class LikeAck(BaseModel):
+    ok: bool
+    changed: bool  # True si se creó el like; False si ya existía (idempotente)

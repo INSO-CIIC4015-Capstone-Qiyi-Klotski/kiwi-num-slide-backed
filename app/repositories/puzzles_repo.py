@@ -183,3 +183,25 @@ def browse_puzzles_public(
         rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
+
+
+def puzzle_exists(puzzle_id: int) -> bool:
+    sql = text("SELECT 1 FROM puzzles WHERE id = :id")
+    with get_conn() as conn:
+        row = conn.execute(sql, {"id": puzzle_id}).first()
+    return row is not None
+
+def create_puzzle_like(user_id: int, puzzle_id: int) -> bool:
+    """
+    Crea el like si no existe. Devuelve True si se insertó, False si ya existía.
+    """
+    sql = text("""
+        INSERT INTO puzzle_likes (user_id, puzzle_id)
+        VALUES (:user_id, :puzzle_id)
+        ON CONFLICT (user_id, puzzle_id) DO NOTHING
+        RETURNING id;
+    """)
+    with get_tx() as conn:
+        row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
+    return row is not None
+
