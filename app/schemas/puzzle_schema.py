@@ -64,3 +64,17 @@ class PuzzleUpdateAck(BaseModel):
 class PuzzleDeleteAck(BaseModel):
     ok: bool
     deleted: bool
+
+
+class PuzzleListItem(BaseModel):
+    id: int
+    slug: str
+    title: str
+    size: int
+    difficulty: Optional[int] = None
+    created_at: str
+    author: Optional[Dict[str, Any]] = None  # { id, slug, display_name, avatar_url? }
+
+class PuzzleListPage(BaseModel):
+    items: List[PuzzleListItem]
+    next_cursor: Optional[str] = None  # último id de la página (opaco)

@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -138,3 +138,48 @@ def delete_puzzle_owned(puzzle_id: int, author_id: int) -> bool:
     with get_tx() as conn:
         row = conn.execute(sql, {"id": puzzle_id, "author_id": author_id}).first()
     return row is not None
+
+
+
+
+def browse_puzzles_public(
+    *, limit: int, cursor_id: Optional[int], size: Optional[int], q: Optional[str]
+) -> List[Dict[str, Any]]:
+    """
+    Lista puzzles públicos (ligeros) con filtros y paginación por id DESC.
+    Retorna hasta limit+1 filas para detectar 'has_more'.
+    """
+    sql = """
+        SELECT
+            p.id,
+            p.title,
+            p.size,
+            p.difficulty,
+            p.created_at,
+            u.id   AS author_id,
+            u.name AS author_name,
+            u.avatar_key AS author_avatar_key
+        FROM puzzles p
+        LEFT JOIN users u ON u.id = p.author_id
+        WHERE 1=1
+    """
+    params: Dict[str, Any] = {"limit": limit + 1}
+
+    if size is not None:
+        sql += " AND p.size = :size"
+        params["size"] = size
+
+    if q:
+        sql += " AND p.title ILIKE :q_like"
+        params["q_like"] = f"%{q}%"
+
+    if cursor_id:
+        sql += " AND p.id < :cursor_id"
+        params["cursor_id"] = cursor_id
+
+    sql += " ORDER BY p.id DESC LIMIT :limit"
+
+    with get_conn() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
+
+    return [dict(r) for r in rows]

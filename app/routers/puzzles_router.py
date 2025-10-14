@@ -1,7 +1,9 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException
 from app.core.security import get_current_token
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
-    PuzzleDeleteAck
+    PuzzleDeleteAck, PuzzleListPage
 from app.services import puzzle_service
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
@@ -66,3 +68,24 @@ def delete_puzzle(
 ):
     current_user_id = int(token["sub"])
     return puzzle_service.delete_puzzle(current_user_id=current_user_id, puzzle_id=puzzle_id)
+
+
+@router.get("", response_model=PuzzleListPage)
+def browse_puzzles(
+    response: Response,
+    size: Optional[int] = Query(None, ge=1, le=10),
+    q: Optional[str] = Query(None, min_length=1, max_length=100),
+    sort: str = Query("created_at_desc"),
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+):
+    try:
+        data = puzzle_service.browse_puzzles_public(
+            limit=limit, cursor=cursor, size=size, q=q, sort=sort
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Cache amigable para SSR/CSR
+    response.headers["Cache-Control"] = "public, s-maxage=120, stale-while-revalidate=60"
+    return data

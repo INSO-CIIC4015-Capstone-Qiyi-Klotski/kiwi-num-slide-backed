@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import requests
 import unicodedata
@@ -169,3 +169,44 @@ def delete_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
             print(f"[WARN] Revalidate request failed: {e}")
 
     return {"ok": True, "deleted": bool(deleted)}
+
+
+
+
+def browse_puzzles_public(
+    *, limit: int, cursor: Optional[str], size: Optional[int], q: Optional[str], sort: str
+) -> Dict[str, Any]:
+
+    if sort and sort != "created_at_desc":
+        raise ValueError("Unsupported sort; only 'created_at_desc' is available")
+
+    cursor_id = int(cursor) if cursor else None
+    rows = puzzles_repo.browse_puzzles_public(limit=limit, cursor_id=cursor_id, size=size, q=q)
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    items: List[Dict[str, Any]] = []
+    for r in rows:
+        author_block = None
+        if r.get("author_id"):
+            display_name = r.get("author_name") or "Unknown"
+            author_block = {
+                "id": r["author_id"],
+                "slug": _slugify(display_name),
+                "display_name": display_name,
+                "avatar_url": _build_avatar_url(r.get("author_avatar_key")),
+            }
+
+        items.append({
+            "id": r["id"],
+            "slug": _slugify(r["title"]),
+            "title": r["title"],
+            "size": r["size"],
+            "difficulty": r["difficulty"],
+            "created_at": r["created_at"].isoformat(),
+            "author": author_block,
+        })
+
+    next_cursor = str(rows[-1]["id"]) if has_more and rows else None
+    return {"items": items, "next_cursor": next_cursor}
