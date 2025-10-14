@@ -205,3 +205,17 @@ def create_puzzle_like(user_id: int, puzzle_id: int) -> bool:
         row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
     return row is not None
 
+
+def delete_puzzle_like(user_id: int, puzzle_id: int) -> bool:
+    """
+    Elimina el like si existe.
+    Devuelve True si borró una fila (changed), False si no existía (idempotente).
+    """
+    sql = text("""
+        DELETE FROM puzzle_likes
+        WHERE user_id = :user_id AND puzzle_id = :puzzle_id
+        RETURNING id;
+    """)
+    with get_tx() as conn:
+        row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
+    return row is not None

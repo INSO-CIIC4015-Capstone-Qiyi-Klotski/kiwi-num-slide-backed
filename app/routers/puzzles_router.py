@@ -99,3 +99,12 @@ def like_puzzle(
 ):
     user_id = int(token["sub"])
     return puzzle_service.like_puzzle(current_user_id=user_id, puzzle_id=puzzle_id)
+
+
+@router.delete("/{puzzle_id}/like", response_model=LikeAck)
+def unlike_puzzle(
+    puzzle_id: int = Path(..., ge=1),
+    token = Depends(get_current_token),
+):
+    user_id = int(token["sub"])
+    return puzzle_service.unlike_puzzle(current_user_id=user_id, puzzle_id=puzzle_id)

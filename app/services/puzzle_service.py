@@ -219,3 +219,11 @@ def like_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
 
     changed = puzzles_repo.create_puzzle_like(current_user_id, puzzle_id)
     return {"ok": True, "changed": bool(changed)}
+
+
+def unlike_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
+    if not puzzles_repo.puzzle_exists(puzzle_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+
+    changed = puzzles_repo.delete_puzzle_like(current_user_id, puzzle_id)
+    return {"ok": True, "changed": bool(changed)}
