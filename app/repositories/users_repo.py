@@ -239,3 +239,38 @@ def list_followers(followee_id: int, limit: int, cursor: Optional[int]) -> list[
         rows = conn.execute(text(base_sql), params).mappings().all()
 
     return [dict(r) for r in rows]
+
+
+def list_my_puzzle_likes(user_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
+    """
+    Devuelve hasta limit+1 filas para detectar next page.
+    Ordenado por puzzle_likes.id DESC (keyset).
+    """
+    base_sql = """
+        SELECT
+            pl.id            AS like_id,
+            pl.created_at    AS like_created_at,
+            p.id             AS puzzle_id,
+            p.title          AS puzzle_title,
+            p.size           AS puzzle_size,
+            p.difficulty     AS puzzle_difficulty,
+            p.created_at     AS puzzle_created_at,
+            u.id             AS author_id,
+            u.name           AS author_name,
+            u.avatar_key     AS author_avatar_key
+        FROM puzzle_likes pl
+        JOIN puzzles p ON p.id = pl.puzzle_id
+        LEFT JOIN users u ON u.id = p.author_id
+        WHERE pl.user_id = :user_id
+    """
+    params = {"user_id": user_id, "limit": limit + 1}
+    if cursor:
+        base_sql += " AND pl.id < :cursor"
+        params["cursor"] = cursor
+
+    base_sql += " ORDER BY pl.id DESC LIMIT :limit"
+
+    with get_conn() as conn:
+        rows = conn.execute(text(base_sql), params).mappings().all()
+
+    return [dict(r) for r in rows]

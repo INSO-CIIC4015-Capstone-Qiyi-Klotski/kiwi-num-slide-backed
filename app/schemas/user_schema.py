@@ -65,3 +65,18 @@ class FollowingUserItem(BaseModel):
 class FollowingPage(BaseModel):
     items: List[FollowingUserItem]
     next_cursor: Optional[str] = None  # cursor opaco (id de follows)
+
+
+class MyLikedPuzzleItem(BaseModel):
+    id: int                 # puzzle id
+    slug: str               # slug del título
+    title: str
+    size: int
+    difficulty: Optional[int] = None
+    created_at: str         # fecha de creación del puzzle
+    author: Optional[dict] = None  # { id, slug, display_name, avatar_url? }
+    since: str              # fecha en la que diste like (ISO)
+
+class MyLikedPuzzlesPage(BaseModel):
+    items: List[MyLikedPuzzleItem]
+    next_cursor: Optional[str] = None

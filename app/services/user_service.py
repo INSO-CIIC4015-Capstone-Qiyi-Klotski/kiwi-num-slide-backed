@@ -180,3 +180,43 @@ def list_my_followers(current_user_id: int, limit: int, cursor: Optional[str]) -
 
     next_cursor = str(rows[-1]["follow_id"]) if has_more and rows else None
     return {"items": items, "next_cursor": next_cursor}
+
+
+def list_my_puzzle_likes(current_user_id: int, limit: int, cursor: Optional[str]) -> dict:
+    cursor_id: Optional[int] = int(cursor) if cursor else None
+
+    rows = users_repo.list_my_puzzle_likes(
+        user_id=current_user_id,
+        limit=limit,
+        cursor=cursor_id,
+    )
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    items = []
+    for r in rows:
+        # Autor (opcional)
+        author_block = None
+        if r.get("author_id"):
+            display_name = r.get("author_name") or "Unknown"
+            author_block = {
+                "id": r["author_id"],
+                "slug": _slugify(display_name),
+                "display_name": display_name,
+                "avatar_url": _build_avatar_url(r.get("author_avatar_key")),
+            }
+
+        items.append({
+            "id": r["puzzle_id"],
+            "slug": _slugify(r["puzzle_title"]),
+            "title": r["puzzle_title"],
+            "size": r["puzzle_size"],
+            "difficulty": r["puzzle_difficulty"],
+            "created_at": r["puzzle_created_at"].isoformat(),
+            "author": author_block,
+            "since": r["like_created_at"].isoformat(),
+        })
+
+    next_cursor = str(rows[-1]["like_id"]) if has_more and rows else None
+    return {"items": items, "next_cursor": next_cursor}
