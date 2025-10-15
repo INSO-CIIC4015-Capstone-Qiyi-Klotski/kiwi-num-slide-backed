@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Optional
+from typing import Optional, Dict, Any
 
 import unicodedata
 import requests
@@ -219,4 +219,37 @@ def list_my_puzzle_likes(current_user_id: int, limit: int, cursor: Optional[str]
         })
 
     next_cursor = str(rows[-1]["like_id"]) if has_more and rows else None
+    return {"items": items, "next_cursor": next_cursor}
+
+
+def list_all_my_solves(current_user_id: int, limit: int, cursor: Optional[str]) -> Dict[str, Any]:
+    cursor_id = int(cursor) if cursor else None
+
+    rows = users_repo.list_my_solves(
+        user_id=current_user_id,
+        limit=limit,
+        cursor_id=cursor_id,
+    )
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    items = []
+    for r in rows:
+        items.append({
+            "id": r["solve_id"],
+            "puzzle": {
+                "id": r["puzzle_id"],
+                "slug": _slugify(r["puzzle_title"]),
+                "title": r["puzzle_title"],
+                "size": r["puzzle_size"],
+                "difficulty": r["puzzle_difficulty"],
+            },
+            "movements": r["movements"],
+            "duration_ms": r["duration_ms"],
+            "solution": r["solution"],  # puede venir None
+            "created_at": r["solve_created_at"].isoformat(),
+        })
+
+    next_cursor = str(rows[-1]["solve_id"]) if has_more and rows else None
     return {"items": items, "next_cursor": next_cursor}

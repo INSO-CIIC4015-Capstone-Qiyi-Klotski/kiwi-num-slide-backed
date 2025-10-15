@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 
 class SSGSeedItem(BaseModel):
@@ -80,3 +80,16 @@ class MyLikedPuzzleItem(BaseModel):
 class MyLikedPuzzlesPage(BaseModel):
     items: List[MyLikedPuzzleItem]
     next_cursor: Optional[str] = None
+
+
+class MySolveRow(BaseModel):
+    id: int                    # solve id
+    puzzle: Dict[str, Any]     # { id, slug, title, size, difficulty? }
+    movements: int
+    duration_ms: int
+    solution: Optional[Dict[str, Any]] = None   # opcional
+    created_at: str            # fecha del solve (ISO)
+
+class MySolvesPage(BaseModel):
+    items: List[MySolveRow]
+    next_cursor: Optional[str] = None           # último solve_id de la página

@@ -6,7 +6,7 @@ from starlette import status
 
 from app.core.security import get_current_token
 from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck, \
-    FollowingPage, MyLikedPuzzlesPage
+    FollowingPage, MyLikedPuzzlesPage, MySolvesPage
 from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -106,3 +106,13 @@ def get_my_puzzle_likes(
 ):
     current_user_id = int(token["sub"])
     return user_service.list_my_puzzle_likes(current_user_id, limit, cursor)
+
+
+@router.get("/me/solves", response_model=MySolvesPage)
+def get_all_my_solves(
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+    token = Depends(get_current_token),
+):
+    current_user_id = int(token["sub"])
+    return user_service.list_all_my_solves(current_user_id, limit, cursor)

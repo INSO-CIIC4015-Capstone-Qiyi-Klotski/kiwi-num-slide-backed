@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from sqlalchemy import text
 from ..db import get_tx, get_conn
@@ -272,5 +272,42 @@ def list_my_puzzle_likes(user_id: int, limit: int, cursor: Optional[int]) -> lis
 
     with get_conn() as conn:
         rows = conn.execute(text(base_sql), params).mappings().all()
+
+    return [dict(r) for r in rows]
+
+
+
+def list_my_solves(
+    *, user_id: int, limit: int, cursor_id: Optional[int]
+) -> List[Dict[str, Any]]:
+    """
+    Devuelve solves del usuario (todas los puzzles), ordenados por ps.id DESC.
+    Retorna hasta limit+1 para detectar next page.
+    """
+    sql = """
+        SELECT
+            ps.id               AS solve_id,
+            ps.movements,
+            ps.duration_ms,
+            ps.solution,
+            ps.created_at       AS solve_created_at,
+            p.id                AS puzzle_id,
+            p.title             AS puzzle_title,
+            p.size              AS puzzle_size,
+            p.difficulty        AS puzzle_difficulty
+        FROM puzzle_solves ps
+        JOIN puzzles p ON p.id = ps.puzzle_id
+        WHERE ps.user_id = :user_id
+    """
+    params: Dict[str, Any] = {"user_id": user_id, "limit": limit + 1}
+
+    if cursor_id:
+        sql += " AND ps.id < :cursor_id"
+        params["cursor_id"] = cursor_id
+
+    sql += " ORDER BY ps.id DESC LIMIT :limit"
+
+    with get_conn() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
