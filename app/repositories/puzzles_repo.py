@@ -249,3 +249,40 @@ def insert_puzzle_solve(
             "solution": solution,
         }).mappings().first()
     return dict(row)
+
+
+
+def list_my_solves_for_puzzle(
+    *, user_id: int, puzzle_id: int, limit: int, cursor_id: Optional[int]
+) -> List[Dict[str, Any]]:
+    """
+    Lista solves del usuario para un puzzle, ordenados por puzzle_solves.id DESC (keyset).
+    Retorna hasta limit+1 filas para detectar next page.
+    """
+    sql = """
+        SELECT
+            ps.id,
+            ps.movements,
+            ps.duration_ms,
+            ps.solution,
+            ps.created_at
+        FROM puzzle_solves ps
+        WHERE ps.user_id = :user_id
+          AND ps.puzzle_id = :puzzle_id
+    """
+    params: Dict[str, Any] = {
+        "user_id": user_id,
+        "puzzle_id": puzzle_id,
+        "limit": limit + 1,
+    }
+
+    if cursor_id:
+        sql += " AND ps.id < :cursor_id"
+        params["cursor_id"] = cursor_id
+
+    sql += " ORDER BY ps.id DESC LIMIT :limit"
+
+    with get_conn() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
+
+    return [dict(r) for r in rows]

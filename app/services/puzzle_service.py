@@ -265,3 +265,33 @@ def submit_puzzle_solve(
         "solution": row["solution"],
         "created_at": row["created_at"].isoformat(),
     }
+
+
+def list_my_solves_for_puzzle(
+    *, current_user_id: int, puzzle_id: int, limit: int, cursor: Optional[str]
+) -> Dict[str, Any]:
+    # 404 si el puzzle no existe
+    if not puzzles_repo.puzzle_exists(puzzle_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+
+    cursor_id = int(cursor) if cursor else None
+    rows = puzzles_repo.list_my_solves_for_puzzle(
+        user_id=current_user_id,
+        puzzle_id=puzzle_id,
+        limit=limit,
+        cursor_id=cursor_id,
+    )
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    items = [{
+        "id": r["id"],
+        "movements": r["movements"],
+        "duration_ms": r["duration_ms"],
+        "solution": r["solution"],  # puede ser None
+        "created_at": r["created_at"].isoformat(),
+    } for r in rows]
+
+    next_cursor = str(rows[-1]["id"]) if has_more and rows else None
+    return {"items": items, "next_cursor": next_cursor}

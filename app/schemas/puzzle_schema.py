@@ -109,3 +109,16 @@ class PuzzleSolveOut(BaseModel):
     duration_ms: int
     solution: Optional[Dict[str, Any]] = None
     created_at: str
+
+
+
+class MySolveItem(BaseModel):
+    id: int
+    movements: int
+    duration_ms: int
+    solution: Optional[Dict[str, Any]] = None  # opcional
+    created_at: str
+
+class MySolvesPage(BaseModel):
+    items: List[MySolveItem]
+    next_cursor: Optional[str] = None  # último solve_id de la página

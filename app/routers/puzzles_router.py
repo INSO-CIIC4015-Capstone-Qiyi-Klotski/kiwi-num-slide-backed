@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException
 from app.core.security import get_current_token
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
-    PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount, PuzzleSolveOut, PuzzleSolveCreate
+    PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount, PuzzleSolveOut, PuzzleSolveCreate, MySolvesPage
 from app.services import puzzle_service
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
@@ -135,4 +135,21 @@ def submit_solve(
         movements=payload.movements,
         duration_ms=payload.duration_ms,
         solution=payload.solution,
+    )
+
+
+
+@router.get("/{puzzle_id}/solves/me", response_model=MySolvesPage)
+def get_my_solves_for_puzzle(
+    puzzle_id: int = Path(..., ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+    token = Depends(get_current_token),
+):
+    user_id = int(token["sub"])
+    return puzzle_service.list_my_solves_for_puzzle(
+        current_user_id=user_id,
+        puzzle_id=puzzle_id,
+        limit=limit,
+        cursor=cursor,
     )
