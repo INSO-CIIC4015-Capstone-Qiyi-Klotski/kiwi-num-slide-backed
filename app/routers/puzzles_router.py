@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException
 from app.core.security import get_current_token
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
-    PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount
+    PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount, PuzzleSolveOut, PuzzleSolveCreate
 from app.services import puzzle_service
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
@@ -120,3 +120,19 @@ def get_puzzle_likes_count(
         # ISR-safe: cache público en edge/CDN
         response.headers["Cache-Control"] = "public, s-maxage=120, stale-while-revalidate=60"
     return data
+
+
+@router.post("/{puzzle_id}/solves", response_model=PuzzleSolveOut, status_code=status.HTTP_201_CREATED)
+def submit_solve(
+    puzzle_id: int = Path(..., ge=1),
+    payload: PuzzleSolveCreate = None,
+    token = Depends(get_current_token),
+):
+    user_id = int(token["sub"])
+    return puzzle_service.submit_puzzle_solve(
+        current_user_id=user_id,
+        puzzle_id=puzzle_id,
+        movements=payload.movements,
+        duration_ms=payload.duration_ms,
+        solution=payload.solution,
+    )

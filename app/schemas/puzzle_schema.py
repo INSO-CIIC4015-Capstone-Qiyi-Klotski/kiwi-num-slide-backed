@@ -87,3 +87,25 @@ class LikeAck(BaseModel):
 
 class LikeCount(BaseModel):
     count: int
+
+
+class PuzzleSolveCreate(BaseModel):
+    movements: int = Field(..., ge=0)
+    duration_ms: int = Field(..., ge=0)
+    solution: Optional[Dict[str, Any]] = None  # JSONB flexible
+
+    @field_validator("solution")
+    @classmethod
+    def solution_if_present_must_be_object(cls, v):
+        if v is not None and not isinstance(v, dict):
+            raise ValueError("solution debe ser un objeto JSON")
+        return v
+
+class PuzzleSolveOut(BaseModel):
+    id: int
+    user_id: int
+    puzzle_id: int
+    movements: int
+    duration_ms: int
+    solution: Optional[Dict[str, Any]] = None
+    created_at: str

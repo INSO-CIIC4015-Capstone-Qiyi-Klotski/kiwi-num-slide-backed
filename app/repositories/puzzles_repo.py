@@ -226,3 +226,26 @@ def count_puzzle_likes(puzzle_id: int) -> int:
     with get_conn() as conn:
         row = conn.execute(sql, {"pid": puzzle_id}).mappings().first()
     return int(row["c"]) if row else 0
+
+
+def insert_puzzle_solve(
+    *, user_id: int, puzzle_id: int, movements: int, duration_ms: int, solution: Optional[Dict[str, Any]]
+) -> dict:
+    sql = text("""
+        INSERT INTO puzzle_solves (user_id, puzzle_id, movements, duration_ms, solution)
+        VALUES (:user_id, :puzzle_id, :movements, :duration_ms, :solution)
+        RETURNING id, user_id, puzzle_id, movements, duration_ms, solution, created_at;
+    """)
+    # Tipar JSONB para evitar problemas de binding
+    if solution is not None:
+        sql = sql.bindparams(bindparam("solution", type_=JSONB))
+
+    with get_tx() as conn:
+        row = conn.execute(sql, {
+            "user_id": user_id,
+            "puzzle_id": puzzle_id,
+            "movements": movements,
+            "duration_ms": duration_ms,
+            "solution": solution,
+        }).mappings().first()
+    return dict(row)

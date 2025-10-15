@@ -233,3 +233,35 @@ def get_puzzle_like_count(puzzle_id: int) -> dict:
     if not puzzles_repo.puzzle_exists(puzzle_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
     return {"count": puzzles_repo.count_puzzle_likes(puzzle_id)}
+
+
+def submit_puzzle_solve(
+    *, current_user_id: int, puzzle_id: int, movements: int, duration_ms: int, solution: Optional[Dict[str, Any]]
+) -> dict:
+    # Validar existencia del puzzle
+    if not puzzles_repo.puzzle_exists(puzzle_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+
+    # (Opcional) validar que movements/duration sean razonables, anti-cheat, etc.
+
+    try:
+        row = puzzles_repo.insert_puzzle_solve(
+            user_id=current_user_id,
+            puzzle_id=puzzle_id,
+            movements=movements,
+            duration_ms=duration_ms,
+            solution=solution,
+        )
+    except Exception as e:
+        # Mantén el detalle limpio hacia el cliente
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid solve payload") from e
+
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "puzzle_id": row["puzzle_id"],
+        "movements": row["movements"],
+        "duration_ms": row["duration_ms"],
+        "solution": row["solution"],
+        "created_at": row["created_at"].isoformat(),
+    }
