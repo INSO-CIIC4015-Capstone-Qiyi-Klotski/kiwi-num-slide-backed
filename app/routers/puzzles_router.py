@@ -5,6 +5,7 @@ from app.core.security import get_current_token
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
     PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount, PuzzleSolveOut, PuzzleSolveCreate, MySolvesPage, DailyPuzzleOut
 from app.services import puzzle_service
+from datetime import date as _date
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
 
@@ -36,6 +37,20 @@ def get_daily_puzzle(response: Response):
     if not data:
         raise HTTPException(status_code=404, detail="Daily puzzle not configured for today")
     response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=60"
+    return data
+
+
+@router.get("/daily-puzzle/{d}", response_model=DailyPuzzleOut)
+def get_daily_puzzle_by_date(
+    d: _date = Path(..., description="Fecha en formato YYYY-MM-DD"),
+    response: Response = None,
+):
+    data = puzzle_service.get_daily_puzzle_for_date(d)
+    if not data:
+        raise HTTPException(status_code=404, detail="Daily puzzle not configured for this date")
+    if response is not None:
+        # ISR-safe
+        response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=60"
     return data
 
 

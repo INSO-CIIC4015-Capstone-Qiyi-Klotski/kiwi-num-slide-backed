@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, date as _date
 from typing import Dict, Any, Optional, List
 from zoneinfo import ZoneInfo
 
@@ -29,6 +29,30 @@ def _today_local_date():
     except Exception:
         tz = ZoneInfo("UTC")
     return datetime.now(tz).date()
+
+def _map_daily_row(row: dict) -> dict:
+    author_block = None
+    if row.get("author_id"):
+        display_name = row.get("author_name") or "Unknown"
+        author_block = {
+            "id": row["author_id"],
+            "slug": _slugify(display_name),
+            "display_name": display_name,
+            "avatar_key": row.get("author_avatar_key"),
+            "avatar_url": _build_avatar_url(row.get("author_avatar_key")),
+        }
+    return {
+        "date": row["dp_date"].isoformat(),
+        "puzzle": {
+            "id": row["puzzle_id"],
+            "slug": _slugify(row["puzzle_title"]),
+            "title": row["puzzle_title"],
+            "size": row["puzzle_size"],
+            "difficulty": row["puzzle_difficulty"],
+            "created_at": row["puzzle_created_at"].isoformat(),
+            "author": author_block,
+        },
+    }
 
 def create_puzzle(
     *, author_id: int, title: str, size: int,
@@ -311,29 +335,8 @@ def list_my_solves_for_puzzle(
 def get_today_daily_puzzle() -> dict | None:
     today = _today_local_date()
     row = puzzles_repo.get_daily_puzzle_by_date(today)
-    if not row:
-        return None
+    return None if not row else _map_daily_row(row)
 
-    author_block = None
-    if row.get("author_id"):
-        display_name = row.get("author_name") or "Unknown"
-        author_block = {
-            "id": row["author_id"],
-            "slug": _slugify(display_name),
-            "display_name": display_name,
-            "avatar_key": row.get("author_avatar_key"),
-            "avatar_url": _build_avatar_url(row.get("author_avatar_key")),
-        }
-
-    return {
-        "date": row["dp_date"].isoformat(),
-        "puzzle": {
-            "id": row["puzzle_id"],
-            "slug": _slugify(row["puzzle_title"]),
-            "title": row["puzzle_title"],
-            "size": row["puzzle_size"],
-            "difficulty": row["puzzle_difficulty"],
-            "created_at": row["puzzle_created_at"].isoformat(),
-            "author": author_block,
-        },
-    }
+def get_daily_puzzle_for_date(d: _date) -> dict | None:
+    row = puzzles_repo.get_daily_puzzle_by_date(d)
+    return None if not row else _map_daily_row(row)
