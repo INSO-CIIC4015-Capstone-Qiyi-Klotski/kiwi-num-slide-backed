@@ -122,3 +122,25 @@ class MySolveItem(BaseModel):
 class MySolvesPage(BaseModel):
     items: List[MySolveItem]
     next_cursor: Optional[str] = None  # último solve_id de la página
+
+
+
+class AuthorSummary(BaseModel):
+    id: int
+    slug: str
+    display_name: str
+    avatar_key: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+class DailyPuzzleItem(BaseModel):
+    id: int
+    slug: str
+    title: str
+    size: int
+    difficulty: Optional[int] = None
+    created_at: str
+    author: Optional[AuthorSummary] = None
+
+class DailyPuzzleOut(BaseModel):
+    date: str  # YYYY-MM-DD
+    puzzle: DailyPuzzleItem

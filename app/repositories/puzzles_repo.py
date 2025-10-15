@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional, Dict, Any, List
 from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import JSONB
@@ -286,3 +287,27 @@ def list_my_solves_for_puzzle(
         rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
+
+
+
+def get_daily_puzzle_by_date(d: date) -> dict | None:
+    sql = text("""
+        SELECT
+            dp.date                         AS dp_date,
+            p.id                            AS puzzle_id,
+            p.title                         AS puzzle_title,
+            p.size                          AS puzzle_size,
+            p.difficulty                    AS puzzle_difficulty,
+            p.created_at                    AS puzzle_created_at,
+            u.id                            AS author_id,
+            u.name                          AS author_name,
+            u.avatar_key                    AS author_avatar_key
+        FROM daily_puzzles dp
+        JOIN puzzles p ON p.id = dp.puzzle_id
+        LEFT JOIN users u ON u.id = p.author_id
+        WHERE dp.date = :d
+        LIMIT 1
+    """)
+    with get_conn() as conn:
+        row = conn.execute(sql, {"d": d}).mappings().first()
+    return dict(row) if row else None
