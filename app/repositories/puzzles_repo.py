@@ -311,3 +311,68 @@ def get_daily_puzzle_by_date(d: date) -> dict | None:
     with get_conn() as conn:
         row = conn.execute(sql, {"d": d}).mappings().first()
     return dict(row) if row else None
+
+
+
+def get_daily_puzzle_by_date(d: date) -> dict | None:
+    sql = text("""
+        SELECT
+            dp.id               AS dp_id,
+            dp.date             AS dp_date,
+            dp.created_at       AS dp_created_at,
+            p.id                AS puzzle_id,
+            p.title             AS puzzle_title,
+            p.size              AS puzzle_size,
+            p.difficulty        AS puzzle_difficulty,
+            p.created_at        AS puzzle_created_at,
+            u.id                AS author_id,
+            u.name              AS author_name,
+            u.avatar_key        AS author_avatar_key
+        FROM daily_puzzles dp
+        JOIN puzzles p ON p.id = dp.puzzle_id
+        LEFT JOIN users u ON u.id = p.author_id
+        WHERE dp.date = :d
+        LIMIT 1
+    """)
+    with get_conn() as conn:
+        row = conn.execute(sql, {"d": d}).mappings().first()
+    return dict(row) if row else None
+
+
+def pick_unused_generated_puzzle(limit: int = 50) -> Optional[int]:
+    """
+    Devuelve un puzzle.id cuyo author_id = -1 y que NO esté referenciado en daily_puzzles.
+    Se prefiere uno reciente. Si no hay, retorna None.
+    """
+    sql = text("""
+        SELECT p.id
+        FROM puzzles p
+        LEFT JOIN daily_puzzles dp ON dp.puzzle_id = p.id
+        WHERE p.author_id = -1
+          AND dp.puzzle_id IS NULL
+        ORDER BY p.created_at DESC
+        LIMIT :limit
+    """)
+    with get_conn() as conn:
+        rows = conn.execute(sql, {"limit": limit}).fetchall()
+    if not rows:
+        return None
+    # elige el primero (más reciente). Si prefieres aleatorio,
+    # usa ORDER BY RANDOM() LIMIT 1 en la query.
+    return int(rows[0][0])
+
+
+def upsert_daily_puzzle(d: date, puzzle_id: int) -> bool:
+    """
+    Inserta (date, puzzle_id) en daily_puzzles si la fecha no existe todavía.
+    Devuelve True si insertó, False si ya existía.
+    """
+    sql = text("""
+        INSERT INTO daily_puzzles (date, puzzle_id)
+        VALUES (:d, :pid)
+        ON CONFLICT (date) DO NOTHING
+        RETURNING id
+    """)
+    with get_tx() as conn:
+        row = conn.execute(sql, {"d": d, "pid": puzzle_id}).first()
+    return row is not None

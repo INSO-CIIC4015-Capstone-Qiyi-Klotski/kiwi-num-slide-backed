@@ -9,6 +9,7 @@ import unicodedata
 from fastapi import HTTPException, status
 
 from app.repositories import puzzles_repo
+from app.services import puzzle_generation
 from app.services.user_service import _build_avatar_url
 
 REVALIDATE_URL = os.getenv("REVALIDATE_URL")
@@ -52,6 +53,50 @@ def _map_daily_row(row: dict) -> dict:
             "created_at": row["puzzle_created_at"].isoformat(),
             "author": author_block,
         },
+    }
+
+
+def ensure_daily_puzzle_for_today(auto_generate_fallback: bool = True) -> dict:
+    """
+    Publica un puzzle de autor -1 no usado aún en daily_puzzles para la fecha local de hoy.
+    Si ya existe daily para hoy, no hace nada.
+    Si no hay puzzles disponibles y auto_generate_fallback=True, genera uno y lo publica.
+    """
+    today = _today_local_date()
+
+    # Si ya existe, no repetimos
+    if puzzles_repo.get_daily_puzzle_by_date(today):
+        return {"ok": True, "skipped": True, "reason": "already_set", "date": today.isoformat()}
+
+    # Intentar elegir uno disponible
+    pid = puzzles_repo.pick_unused_generated_puzzle(limit=50)
+
+    # Fallback opcional: generar uno si no hay
+    if pid is None and auto_generate_fallback:
+        gen = puzzle_generation.generate_and_store_puzzles(
+            count=1,
+            N=4,
+            difficulty=3,
+            allowed_numbers=[2, 3, 4, 5, 6],
+            operators_spec=[("+", None), ("-", None), ("*", 2), ("/", 2)],
+            require_unique=True,
+            max_attempts=300,
+            include_solutions=True,
+            solutions_cap=1,
+        )
+        # vuelve a buscar uno libre
+        pid = puzzles_repo.pick_unused_generated_puzzle(limit=1)
+
+    if pid is None:
+        # No se pudo asignar daily
+        raise HTTPException(status_code=409, detail="No available generated puzzles to schedule for daily")
+
+    inserted = puzzles_repo.upsert_daily_puzzle(today, pid)
+    return {
+        "ok": inserted,
+        "date": today.isoformat(),
+        "puzzle_id": pid,
+        "skipped": not inserted,
     }
 
 def create_puzzle(

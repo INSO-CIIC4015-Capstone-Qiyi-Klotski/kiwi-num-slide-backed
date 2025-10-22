@@ -1,10 +1,12 @@
+import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException
+from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException, Header
 from app.core.security import get_current_token
+from app.schemas.puzzle_generation_schema import PuzzleGenConfig
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
     PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount, PuzzleSolveOut, PuzzleSolveCreate, MySolvesPage, DailyPuzzleOut
-from app.services import puzzle_service
+from app.services import puzzle_service, puzzle_generation
 from datetime import date as _date
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
@@ -176,3 +178,27 @@ def get_my_solves_for_puzzle(
         limit=limit,
         cursor=cursor,
     )
+
+
+
+@router.post("/generate", status_code=201)
+def generate_puzzles(
+    cfg: PuzzleGenConfig,
+    secret: Optional[str] = Query(None),
+    x_gen_secret: Optional[str] = Header(None, alias="X-Gen-Secret"),
+):
+    expected = os.getenv("GENERATION_SECRET")
+    provided = secret or x_gen_secret
+    if not expected or provided != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return puzzle_generation.generate_and_store_puzzles(**cfg.dict())
+
+
+@router.post("/daily/ensure")
+def ensure_daily(secret: Optional[str] = Query(None), x_gen_secret: Optional[str] = Header(None, alias="X-Gen-Secret")):
+    expected = os.getenv("GENERATION_SECRET")
+    provided = secret or x_gen_secret
+    if not expected or provided != expected:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return puzzle_service.ensure_daily_puzzle_for_today(auto_generate_fallback=True)
