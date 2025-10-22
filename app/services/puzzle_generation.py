@@ -71,6 +71,29 @@ class Puzzle:
       - This class only builds a puzzle instance and can solve it via backtracking.
       - Uniqueness (exactly one solution) is decided externally by limiting the solver
         to at most two solutions and checking the count.
+
+    Example:
+        {
+          "N": 3,
+          "numbers": [1, 4, 5, 3, 8, 1, 2, 5, 2],
+          "operators": ["+1", "-2", "+3", "+4", "+5", "-6", "-7", "+8", "+9", "-10", "+11", "-12"], The operators have numbers so they can be identified below.
+          "expected": ["10", "5", "8", "10", "9", "4"]
+        }
+
+                                                  expected
+             1    +1    4    -2    5        -> 10
+
+            -7         +8         +9
+
+             3    +3    8    +4    1        -> 5
+
+           -10        -11         -12
+
+             2    +5    5    -6    2        -> 8
+
+             |          |          |
+             v          v          v
+             10         9          4
     """
 
     # Default operator spec if none is provided: unlimited '+' and '-'.
