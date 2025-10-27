@@ -23,10 +23,6 @@ def _fraction_to_string(fr: Fraction) -> str:
     Rules:
       - If denominator is 1, return just the integer part (e.g., 10/1 -> "10").
       - Otherwise return "numerator/denominator" (e.g., -11/4 -> "-11/4").
-
-    Rationale:
-      Storing expected targets as strings avoids floating-point rounding issues
-      and preserves exact arithmetic semantics across the stack.
     """
     return str(fr.numerator) if fr.denominator == 1 else f"{fr.numerator}/{fr.denominator}"
 
@@ -34,10 +30,6 @@ def _fraction_to_string(fr: Fraction) -> str:
 def _string_to_fraction(s: str) -> Fraction:
     """
     Parse a canonical fraction string ("a/b" or "a") back into a Fraction.
-
-    Input:
-      - "a/b" where a and b are signed integers and b != 0
-      - "a"   where a is a signed integer
 
     Raises:
       ValueError if the format is invalid.
@@ -55,45 +47,25 @@ def _string_to_fraction(s: str) -> Fraction:
 
 class Puzzle:
     """
-    N×N arithmetic-slide puzzle generator.
+    N×N arithmetic-slide puzzle generator WITHOUT storing '1' as a blank tile.
+    The cell at (N-1, N-1) is ALWAYS the empty space in the solution.
 
     Board encoding:
-      - numbers: flat list with N*N integers. The blank is represented by a single '1'
-                 (conventional in this project), and the remaining N*N-1 numbers are
-                 sampled with replacement from a configured domain (>=2).
-      - operators: flat list with 2*N*(N-1) operators laid out in a grid-mesh
-                   (each row has N-1 horizontal ops; each column has N-1 vertical ops).
-      - expected: list of length 2*N with target results: the first N are row targets,
-                  the next N are column targets. Expressions are evaluated with precedence
-                  (*/ before +-), not strictly left-to-right.
+      - numbers: flat list with N*N-1 integers (the blank cell is not included).
+      - operators: flat list with (2*N*(N-1) - 2) operators because the two operators
+                   adjacent to the bottom-right blank are removed:
+          * between-columns (horizontals): N rows → (N-1) per row EXCEPT the last row
+            which has (N-2).
+          * between-rows (vertical levels between row r and r+1): (N-1) levels →
+            N per level EXCEPT the last level which has (N-1) (no operator in the last
+            column at the bottom level).
+      - expected: list of length 2*N with row targets followed by column targets.
+                  The last row/last column are evaluated with N-1 values and N-2 operators
+                  (because the bottom-right corner is the blank).
 
     Notes:
-      - This class only builds a puzzle instance and can solve it via backtracking.
-      - Uniqueness (exactly one solution) is decided externally by limiting the solver
-        to at most two solutions and checking the count.
-
-    Example:
-        {
-          "N": 3,
-          "numbers": [1, 4, 5, 3, 8, 1, 2, 5, 2],
-          "operators": ["+1", "-2", "+3", "+4", "+5", "-6", "-7", "+8", "+9", "-10", "+11", "-12"], The operators have numbers so they can be identified below.
-          "expected": ["10", "5", "8", "10", "9", "4"]
-        }
-
-                                                  expected
-             1    +1    4    -2    5        -> 10
-
-            -7         +8         +9
-
-             3    +3    8    +4    1        -> 5
-
-           -10        -11         -12
-
-             2    +5    5    -6    2        -> 8
-
-             |          |          |
-             v          v          v
-             10         9          4
+      - This class builds a puzzle instance and can solve it via backtracking.
+      - Uniqueness (exactly one solution) is decided externally by limiting the solver.
     """
 
     # Default operator spec if none is provided: unlimited '+' and '-'.
@@ -116,16 +88,19 @@ class Puzzle:
           N: Board size (N×N).
           seed: Optional random seed. If None and use_daily_seed=True, a deterministic
                 daily seed is derived from (today, N).
-          use_daily_seed: If True and no seed is given, derive a daily seed so the same
-                          parameters reproduce the same random stream that day.
-          shuffle_after_expected: If True, shuffle numbers after computing expected targets.
-                                  This preserves the math but makes the layout look random.
-          operators_spec: Operator specification as a list of tuples:
+          use_daily_seed: If True and seed=None, the same inputs reproduce the same
+                          puzzle on that day.
+          shuffle_after_expected: If True, shuffle 'numbers' after computing expected,
+                                  to randomize the visual layout while preserving math.
+          operators_spec: Operator specification:
                             [ ('+', None), ('-', None), ('*', 2), ('/', 2) ]
-                          A 1-tuple ('+',) or ('*',) also means unlimited. A 2-tuple with
-                          an integer count means an exact amount of that operator.
-          numbers_choices: Allowed domain for non-blank numbers (>=2). If None, use [2..9].
+                          A 1-tuple ('+',) or ('*',) also means unlimited.
+                          A 2-tuple with an integer count means an exact amount.
+          numbers_choices: Allowed domain for numbers (>=2). If None, uses [2..9].
         """
+        if N < 2:
+            raise ValueError("N must be >= 2 in this fixed-blank mode.")
+
         if seed is None and use_daily_seed:
             seed = self._daily_seed(f"{date.today().isoformat()}-{N}")
         self._rng = random.Random(seed)
@@ -136,44 +111,34 @@ class Puzzle:
         )
         self._numbers_choices = self._normalize_number_choices(numbers_choices)
 
-        self.numbers = self._gen_numbers_with_blank_at_end()
+        # (1) Generate numbers WITHOUT the blank.
+        self.numbers = self._gen_numbers_without_blank()
+
+        # (2) Generate operators respecting the two missing ones adjacent to the bottom-right blank.
+        #     Internally we keep per-row/per-level structures and also a flattened view.
+        self._hops_per_row: List[List[str]] = []     # lengths: [N-1, N-1, ..., N-2]
+        self._vops_per_level: List[List[str]] = []   # lengths: [N,   N,   ..., N-1]
         self.operators = self._gen_operators()
+
+        # (3) Compute expected targets with standard precedence and truncated edges.
         self.expected = self._compute_expected()  # List[Fraction]
 
         if shuffle_after_expected:
             self._rng.shuffle(self.numbers)
 
-        # Cache for solved boards (each is a flat N*N list). Useful for hints in the FE.
+        # Cache for solved boards (each is a flat N*N-1 list laid row-wise, omitting the final blank).
         self.solutions: List[List[int]] = []
 
     # ---------- Seeds & Normalization ----------
 
     @staticmethod
     def _daily_seed(key: str) -> int:
-        """
-        Build a 32-bit deterministic seed from an arbitrary string.
-
-        Used to create daily-stable randomness: same inputs → same puzzle on a given day.
-        """
         return int(sha256(key.encode()).hexdigest(), 16) % (2**32)
 
     @staticmethod
     def _normalize_op_spec(
         spec: List[Tuple[str, Optional[int]]]
     ) -> Tuple[Dict[str, int], List[str]]:
-        """
-        Validate and split operator specification into:
-          - op_exact: dict of operator -> exact count
-          - op_unlimited: list of operators that can be used to fill the remaining slots
-
-        Accepted forms in 'spec':
-          - ('+',) or ('+', None)  → unlimited
-          - ('*', 2)               → exactly 2 times
-
-        Raises:
-          ValueError on invalid operators, shapes, negative counts, or conflicts (both
-          exact and unlimited for the same operator).
-        """
         valid_ops = {'+', '-', '*', '/'}
         op_exact: Dict[str, int] = {}
         op_unlimited: List[str] = []
@@ -213,16 +178,6 @@ class Puzzle:
 
     @staticmethod
     def _normalize_number_choices(choices: Optional[List[int]]) -> List[int]:
-        """
-        Validate/normalize the allowed number domain for non-blank tiles.
-
-        Behavior:
-          - None  → default domain [2..9]
-          - list  → must be non-empty, all integers >= 2
-
-        Raises:
-          ValueError on invalid inputs.
-        """
         if choices is None:
             return list(range(2, 10))
         if not isinstance(choices, list) or len(choices) == 0:
@@ -238,30 +193,40 @@ class Puzzle:
 
     # ---------- Generation ----------
 
-    def _gen_numbers_with_blank_at_end(self) -> List[int]:
+    def _gen_numbers_without_blank(self) -> List[int]:
         """
-        Sample N*N-1 numbers from the domain (with replacement) and append a single '1'
-        to represent the blank tile. Returns a flat list of length N*N.
+        Sample N*N-1 numbers from the domain (with replacement).
+        The cell (N-1, N-1) IS the space; no '1' or any placeholder is added.
         """
-        total = self.N * self.N
-        nums = [self._rng.choice(self._numbers_choices) for _ in range(total - 1)]
-        nums.append(1)
-        return nums
+        total = self.N * self.N - 1
+        return [self._rng.choice(self._numbers_choices) for _ in range(total)]
 
     def _gen_operators(self) -> List[str]:
         """
-        Build the operator grid (flattened) with length 2*N*(N-1).
+        Build the operator mesh with TWO operators missing adjacent to the blank:
+          - Last row: (N-2) between-columns operators (the rightmost one is missing).
+          - Last vertical level (between last two rows): (N-1) between-rows operators
+            (the one in the last column is missing).
 
         Process:
-          1) Place all exact-count operators.
-          2) Fill the remaining slots by sampling from unlimited operators.
-          3) Shuffle to avoid patterned placement.
-
-        Raises:
-          ValueError if exact counts exceed the total or no unlimited operators exist to fill.
+          1) Compute total: total = 2*N*(N-1) - 2.
+          2) Place exact-count operators.
+          3) Fill the remaining with unlimited operators.
+          4) Distribute into:
+             - self._hops_per_row  (N lists; lengths [N-1]*(N-1) + [N-2])
+             - self._vops_per_level (N-1 lists; lengths [N]*(N-2) + [N-1])
+          5) Flatten using the same pattern as the visual layout:
+             for r in 0..N-2: between-columns of row r, then between-rows of level r;
+             finally: between-columns of the last row.
         """
-        total = 2 * self.N * (self.N - 1)
+        N = self.N
+        if N < 2:
+            return []
+
+        total = 2 * N * (N - 1) - 2
         if total == 0:
+            self._hops_per_row = [[] for _ in range(N)]
+            self._vops_per_level = [[] for _ in range(N - 1)]
             return []
 
         exact_sum = sum(self.op_exact.values())
@@ -276,22 +241,44 @@ class Puzzle:
                 f"{remaining} operators missing and no unlimited operators to fill them."
             )
 
-        ops_out: List[str] = []
+        # Build a pool with the desired counts.
+        ops_pool: List[str] = []
         for op, cnt in self.op_exact.items():
             if cnt > 0:
-                ops_out.extend([op] * cnt)
+                ops_pool.extend([op] * cnt)
         for _ in range(remaining):
-            ops_out.append(random.choice(self.op_unlimited))
-        random.shuffle(ops_out)
-        return ops_out
+            ops_pool.append(random.choice(self.op_unlimited))
+        random.shuffle(ops_pool)  # avoid patterned placement
+
+        # Target structure lengths:
+        # between-columns per row
+        h_lengths = [N - 1] * (N - 1) + [N - 2]   # last row has one fewer
+        # between-rows per level (between row r and r+1)
+        v_lengths = [N] * (N - 2) + [N - 1]       # last level has one fewer
+
+        # Fill structures from the shuffled pool in deterministic order.
+        it = iter(ops_pool)
+
+        self._hops_per_row = []
+        for L in h_lengths:
+            self._hops_per_row.append([next(it) for _ in range(L)])
+
+        self._vops_per_level = []
+        for L in v_lengths:
+            self._vops_per_level.append([next(it) for _ in range(L)])
+
+        # Flatten as: [h_row0, v_level0, h_row1, v_level1, ... , h_row_{N-2}, v_level_{N-2}, h_row_{N-1}]
+        flat: List[str] = []
+        for r in range(N - 1):
+            flat.extend(self._hops_per_row[r])
+            flat.extend(self._vops_per_level[r])
+        flat.extend(self._hops_per_row[N - 1])
+        return flat
 
     # ---------- Expression Evaluation ----------
 
     @staticmethod
     def _apply_mul_div(a: Fraction, b: Fraction, op: str) -> Optional[Fraction]:
-        """
-        Apply '*' or '/' between two Fractions. Returns None on division by zero.
-        """
         if op == '*':
             return a * b
         if op == '/':
@@ -303,19 +290,11 @@ class Puzzle:
     @staticmethod
     def _eval_line_with_precedence(values: List[int], ops: List[str]) -> Optional[Fraction]:
         """
-        Evaluate a single row/column expression with standard precedence:
-          - Perform all * and / left-to-right first,
-          - Then perform + and - left-to-right.
-
-        Returns:
-          Fraction result, or None if an invalid op (e.g., division by zero) occurs.
-
-        Assumes:
-          len(values) >= 1 and len(ops) == len(values) - 1
+        Evaluate a row/column expression with standard precedence (*, / before +, -).
         """
         assert len(values) >= 1 and len(ops) == len(values) - 1
 
-        # First pass: collapse */ into the value list.
+        # Pass 1: collapse * and / left-to-right.
         tmp_vals: List[Fraction] = [Fraction(values[0])]
         tmp_ops: List[str] = []
         for i, op in enumerate(ops):
@@ -330,7 +309,7 @@ class Puzzle:
                 tmp_vals.append(b)
                 tmp_ops.append(op)
 
-        # Second pass: do + and - on the reduced list.
+        # Pass 2: apply + and - on the reduced list.
         acc = tmp_vals[0]
         j = 1
         for op in tmp_ops:
@@ -343,45 +322,76 @@ class Puzzle:
             j += 1
         return acc
 
-    # ---------- Expected Targets ----------
+    # ---------- Operator accessors (with two absences) ----------
 
     def _row_ops(self, r: int) -> List[str]:
         """
-        Slice the horizontal operators for row r from the flattened operator list.
+        Return the between-columns operators for row r.
+        The last row has N-2 operators.
         """
-        start = r * (2 * self.N - 1)
-        return [self.operators[start + j] for j in range(self.N - 1)]
+        return self._hops_per_row[r][:]
 
     def _col_ops(self, c: int) -> List[str]:
         """
-        Slice the vertical operators for column c from the flattened operator list.
+        Return the between-rows operators for column c (top to bottom), by traversing levels.
+        The last level has no operator for the last column. Therefore:
+          - if c < N-1 → length N-1
+          - if c == N-1 → length N-2
         """
-        base = (self.N - 1) + c
-        step = 2 * self.N - 1
-        return [self.operators[base + k * step] for k in range(self.N - 1)]
+        ops: List[str] = []
+        # levels 0..N-3 have N columns
+        for level in range(self.N - 2):
+            ops.append(self._vops_per_level[level][c])
+        # last level (N-2) has columns 0..N-2
+        if c < self.N - 1:
+            if c <= self.N - 2:
+                ops.append(self._vops_per_level[self.N - 2][c])
+        return ops
+
+    # ---------- Expected Targets ----------
 
     def _compute_expected(self) -> List[Fraction]:
         """
-        Compute target values for all rows and columns using operator precedence.
-
-        Returns:
-          A list of length 2*N: first N are row targets, next N are column targets.
+        Compute row and column targets with bottom-right blank
+        and without the two adjacent operators.
         """
         N = self.N
-        b = self.numbers
+        b = self.numbers  # length N*N-1
 
         expected_rows: List[Fraction] = []
         for r in range(N):
-            vals = b[r * N:(r + 1) * N]
-            res = self._eval_line_with_precedence(vals, self._row_ops(r))
+            start = r * N
+            if r < N - 1:
+                vals = b[start:start + N]          # full N values
+                ops = self._row_ops(r)             # N-1 operators
+            else:
+                # last row: only N-1 values (the last cell is blank)
+                vals = b[start:start + (N - 1)]
+                ops = self._row_ops(r)             # N-2 operators
+            if len(vals) == 0:
+                raise ValueError("Empty row; N must be >= 2.")
+            if len(ops) != len(vals) - 1:
+                raise ValueError("Row/ops mismatch while computing expected.")
+            res = self._eval_line_with_precedence(vals, ops)
             if res is None:
                 raise ValueError("Division by zero while computing expected (row).")
             expected_rows.append(res)
 
         expected_cols: List[Fraction] = []
         for c in range(N):
-            vals = [b[r * N + c] for r in range(N)]
-            res = self._eval_line_with_precedence(vals, self._col_ops(c))
+            if c < N - 1:
+                # full column (N values)
+                vals = [b[r * N + c] for r in range(N)]
+                ops = self._col_ops(c)             # N-1 operators
+            else:
+                # last column: only N-1 values (the last cell is blank)
+                vals = [b[r * N + c] for r in range(N - 1)]
+                ops = self._col_ops(c)             # N-2 operators
+            if len(vals) == 0:
+                raise ValueError("Empty column; N must be >= 2.")
+            if len(ops) != len(vals) - 1:
+                raise ValueError("Column/ops mismatch while computing expected.")
+            res = self._eval_line_with_precedence(vals, ops)
             if res is None:
                 raise ValueError("Division by zero while computing expected (column).")
             expected_cols.append(res)
@@ -392,54 +402,53 @@ class Puzzle:
 
     @staticmethod
     def _idx_to_rc(idx: int, N: int) -> Tuple[int, int]:
-        """
-        Convert a flat index to (row, col).
-        """
         return divmod(idx, N)
 
-    def _row_values(self, board: List[Optional[int]], r: int) -> List[Optional[int]]:
+    def _row_values(self, board: List[Optional[int]], r: int) -> List[int]:
         """
-        Return the r-th row (possibly partially filled) from a flat board.
+        Return NUMERIC values for row r under the new model:
+          - rows 0..N-2: N values
+          - row N-1: N-1 values (the final corner is blank)
         """
-        i = r * self.N
-        return board[i:i + self.N]
+        N = self.N
+        start = r * N
+        if r < N - 1:
+            seg = board[start:start + N]
+        else:
+            seg = board[start:start + (N - 1)]
+        # The board never places the final blank; by design there should be no None here when validating
+        return [int(v) for v in seg]
 
-    def _col_values(self, board: List[Optional[int]], c: int) -> List[Optional[int]]:
+    def _col_values(self, board: List[Optional[int]], c: int) -> List[int]:
         """
-        Return the c-th column (possibly partially filled) from a flat board.
+        Return NUMERIC values for column c under the new model:
+          - columns 0..N-2: N values
+          - column N-1: N-1 values (the final corner is blank)
         """
-        return [board[r * self.N + c] for r in range(self.N)]
+        N = self.N
+        if c < N - 1:
+            vals = [board[r * N + c] for r in range(N)]
+        else:
+            vals = [board[r * N + c] for r in range(N - 1)]
+        return [int(v) for v in vals]
 
     def _row_is_valid(self, board: List[Optional[int]], r: int) -> bool:
-        """
-        Check whether row r exactly matches its expected target (when the row is full).
-        """
-        vals = [int(v) for v in self._row_values(board, r)]
-        res = self._eval_line_with_precedence(vals, self._row_ops(r))
+        vals = self._row_values(board, r)
+        ops = self._row_ops(r)
+        res = self._eval_line_with_precedence(vals, ops)
         target = self.expected[r]
         return res is not None and res == target
 
     def _col_is_valid(self, board: List[Optional[int]], c: int) -> bool:
-        """
-        Check whether column c exactly matches its expected target (when the column is full).
-        """
-        vals = [int(v) for v in self._col_values(board, c)]
-        res = self._eval_line_with_precedence(vals, self._col_ops(c))
+        vals = self._col_values(board, c)
+        ops = self._col_ops(c)
+        res = self._eval_line_with_precedence(vals, ops)
         target = self.expected[self.N + c]
         return res is not None and res == target
 
     # ---------- Equality ----------
 
     def is_equal_to(self, other: "Puzzle") -> bool:
-        """
-        Structural equality:
-          - same N
-          - identical operator sequence
-          - identical expected targets
-          - same multiset of numbers
-
-        Useful for duplicate detection.
-        """
         if not isinstance(other, Puzzle):
             return False
         return (
@@ -453,48 +462,71 @@ class Puzzle:
 
     def solve_all(self, max_solutions: Optional[int] = None, store: bool = False) -> List[List[int]]:
         """
-        Enumerate solutions via backtracking on a flat N*N board.
+        Backtracking that places exactly N*N-1 cells (all except (N-1, N-1)).
 
         Heuristics:
           - MRV-ish: try numbers with the lowest remaining count first.
-          - Prioritize placing '1' earlier (since the blank is abundant).
-
-        Args:
-          max_solutions: None to search all, or an integer cutoff to stop early
-                         (e.g., 2 to test uniqueness quickly).
-          store: If True, cache found solutions in self.solutions (deep copy).
-
-        Returns:
-          List of flat solutions (each of length N*N).
         """
         N = self.N
+
+        # Indices to fill (omit the bottom-right corner)
+        fill_order: List[int] = [i for i in range(N * N) if i != (N * N - 1)]
+
         board: List[Optional[int]] = [None] * (N * N)
         pool = Counter(self.numbers)
         solutions: List[List[int]] = []
 
-        def place(idx: int) -> None:
-            if idx == N * N:
-                solutions.append([int(v) for v in board])
+        # Helpers to know when a row/column becomes "complete" under the new rules
+        def completes_row(idx: int) -> Optional[int]:
+            r, c = self._idx_to_rc(idx, N)
+            # rows 0..N-2: complete when c == N-1
+            if r < N - 1 and c == N - 1:
+                return r
+            # last row: complete when c == N-2 (final cell is blank)
+            if r == N - 1 and c == N - 2:
+                return r
+            return None
+
+        def completes_col(idx: int) -> Optional[int]:
+            r, c = self._idx_to_rc(idx, N)
+            # columns 0..N-2: complete when r == N-1
+            if c < N - 1 and r == N - 1:
+                return c
+            # last column: complete when r == N - 2 (final cell is blank)
+            if c == N - 1 and r == N - 2:
+                return c
+            return None
+
+        def place(k: int) -> None:
+            if k == len(fill_order):
+                # Extract a flat solution “without blank” (row-wise, omitting the last cell)
+                sol = [board[i] for i in fill_order]
+                solutions.append([int(v) for v in sol])
                 return
 
-            r, c = self._idx_to_rc(idx, N)
+            idx = fill_order[k]
+
             candidates = [v for v, cnt in pool.items() if cnt > 0]
-            candidates.sort(key=lambda v: (pool[v], 0 if v == 1 else 1, v))
+            candidates.sort(key=lambda v: (pool[v], v))
 
             for val in candidates:
                 board[idx] = val
                 pool[val] -= 1
 
-                if c == N - 1 and not self._row_is_valid(board, r):
-                    pool[val] += 1
-                    board[idx] = None
-                    continue
-                if r == N - 1 and not self._col_is_valid(board, c):
+                # Boundary validations when a row/col completes
+                rr = completes_row(idx)
+                if rr is not None and not self._row_is_valid(board, rr):
                     pool[val] += 1
                     board[idx] = None
                     continue
 
-                place(idx + 1)
+                cc = completes_col(idx)
+                if cc is not None and not self._col_is_valid(board, cc):
+                    pool[val] += 1
+                    board[idx] = None
+                    continue
+
+                place(k + 1)
 
                 if max_solutions is not None and len(solutions) >= max_solutions:
                     pool[val] += 1
@@ -511,33 +543,18 @@ class Puzzle:
         return solutions
 
     def solve_and_cache(self, max_solutions: Optional[int] = None) -> List[List[int]]:
-        """
-        Convenience wrapper: call solve_all(..., store=True).
-        """
         return self.solve_all(max_solutions=max_solutions, store=True)
 
     def clear_solutions(self) -> None:
-        """
-        Drop any cached solutions.
-        """
         self.solutions = []
 
     def num_solutions_cached(self) -> int:
-        """
-        Return the number of currently cached solutions.
-        """
         return len(self.solutions)
 
     def get_cached_solutions(self) -> List[List[int]]:
-        """
-        Return a deep copy of cached solutions to avoid external mutation.
-        """
         return [s[:] for s in self.solutions]
 
     def solve_flat(self, max_solutions: Optional[int] = None) -> List[List[int]]:
-        """
-        Backward-compat convenience alias (no caching by default).
-        """
         return self.solve_all(max_solutions=max_solutions, store=False)
 
 
@@ -552,19 +569,12 @@ def _as_board_spec(
     solutions_cap: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Serialize a Puzzle into the JSONB shape stored in the database.
+    Serialize the puzzle to the DB JSONB shape.
 
-    Fields:
-      - N: board size
-      - numbers: flat list of N*N integers
-      - operators: flat list of 2*N*(N-1) operators
-      - expected: list of fraction strings ("a/b" or "a") to remain exact
-      - solutions (optional): list of flat boards (ints). Included only if
-        'include_solutions' is True; capped to 'solutions_cap' if provided.
-
-    NOTE:
-      Solutions are cached in the Puzzle instance. If include_solutions=True and no
-      solutions are cached yet, ensure the caller invokes solve_and_cache() first.
+    Key changes in this mode:
+      - 'numbers' length is N*N-1 (blank not stored).
+      - 'operators' length is 2*N*(N-1) - 2.
+      - 'expected' already accounts for truncated last row/column.
     """
     spec: Dict[str, Any] = {
         "N": p.N,
@@ -584,15 +594,7 @@ def _as_board_spec(
 
 def _is_duplicate(p: Puzzle, bag: Iterable[Dict[str, Any]]) -> bool:
     """
-    Check for duplicates against a collection of already prepared board_specs
-    (e.g., within a generation batch), using structural equality:
-
-      - same N
-      - same operators sequence
-      - same expected targets (fraction strings)
-      - same multiset of numbers
-
-    Returns True if a duplicate is found.
+    Structural duplicate check against already prepared board_specs.
     """
     expected_str = [_fraction_to_string(x) for x in p.expected]
     for spec in bag:
@@ -615,16 +617,7 @@ def find_one_puzzle(
     max_solutions_check: int = 2,
 ) -> Optional[Puzzle]:
     """
-    Try to generate a single puzzle that satisfies the constraints.
-
-    Constraints:
-      - If 'require_unique' is True, the puzzle must have exactly one solution.
-        We enforce this by solving with 'max_solutions_check' (default 2) and
-        accepting only when exactly one solution is found.
-      - If 'require_unique' is False, we accept any puzzle with at least one solution.
-
-    Returns:
-      A Puzzle instance that meets the criteria, or None if not satisfied.
+    Try to generate one puzzle satisfying the constraints (optionally unique).
     """
     p = Puzzle(
         N=N,
@@ -653,32 +646,6 @@ def generate_and_store_puzzles(
 ) -> Dict[str, Any]:
     """
     Generate up to 'count' puzzles and persist them into the database.
-
-    Behavior:
-      - Attempts to generate puzzles until either 'count' are saved or 'max_attempts'
-        total tries are exhausted.
-      - Uses 'find_one_puzzle' for each attempt to enforce uniqueness (if requested).
-      - Avoids duplicates within the same batch (in-memory check). If you need to
-        avoid duplicates across the whole DB, add a DB-side uniqueness query here.
-
-    Persistence:
-      - Inserts a row into 'puzzles' with:
-          author_id = -1  (system/algorithm user)
-          title     = "AutoGen {N}x{N}"
-          size      = N
-          board_spec = JSONB (see _as_board_spec)
-          difficulty = optional tag
-          num_solutions = number of cached solutions (when available)
-
-    Returns:
-      A summary dict:
-        {
-          "requested": <count>,
-          "inserted": <how many saved>,
-          "attempts": <tries made>,
-          "difficulty": <difficulty>,
-          "N": <board size>
-        }
     """
     saved_specs: List[Dict[str, Any]] = []
     attempts = 0
@@ -696,9 +663,8 @@ def generate_and_store_puzzles(
         if not p:
             continue
 
-        # Ensure solutions are cached if the caller wants them saved in board_spec.
         if include_solutions and not p.solutions:
-            p.solve_and_cache()  # could be cut down later via solutions_cap
+            p.solve_and_cache()
 
         spec = _as_board_spec(
             p,
@@ -706,7 +672,6 @@ def generate_and_store_puzzles(
             solutions_cap=solutions_cap,
         )
 
-        # Avoid duplicates within this generation batch.
         if _is_duplicate(p, saved_specs):
             continue
 
