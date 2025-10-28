@@ -9,6 +9,9 @@ from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, Upda
     FollowingPage, MyLikedPuzzlesPage, MySolvesPage
 from app.services import user_service
 
+from app.core.security import get_current_token_cookie_or_header
+from app.core.cookies import require_csrf
+
 router = APIRouter(prefix="/users", tags=["users"])
 
 
@@ -19,7 +22,7 @@ def ssg_seed(limit: int = Query(200, ge=1, le=1000)):
 
 
 @router.get("/me", response_model=MyProfile)
-def get_me(token=Depends(get_current_token)):
+def get_me(token=Depends(get_current_token_cookie_or_header)):
     user_id = int(token["sub"])
     data = user_service.get_my_profile(user_id)
     if not data:
@@ -30,7 +33,7 @@ def get_me(token=Depends(get_current_token)):
 
 
 @router.patch("/me", response_model=UpdateAck, status_code=200)
-def patch_me(payload: UpdateMyProfile, token=Depends(get_current_token)):
+def patch_me(payload: UpdateMyProfile, token=Depends(get_current_token_cookie_or_header), _csrf = Depends(require_csrf),):
     if payload.name is None and payload.avatar_key is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Provide at least one of: name, avatar_key")
@@ -60,7 +63,8 @@ def get_user_public_profile(
 @router.post("/{user_id}/follow", response_model=FollowAck)
 def follow_user(
     user_id: int = Path(..., ge=1),
-    token=Depends(get_current_token),
+    token=Depends(get_current_token_cookie_or_header),
+    _csrf=Depends(require_csrf),
 ):
     follower_id = int(token["sub"])
     return user_service.follow_user(follower_id, user_id)
@@ -70,7 +74,8 @@ def follow_user(
 @router.delete("/{user_id}/follow", response_model=FollowAck)
 def unfollow_user(
     user_id: int = Path(..., ge=1),
-    token=Depends(get_current_token),
+    token=Depends(get_current_token_cookie_or_header),
+    _csrf=Depends(require_csrf),
 ):
     follower_id = int(token["sub"])
     return user_service.unfollow_user(follower_id, user_id)
@@ -81,7 +86,7 @@ def unfollow_user(
 def get_my_following(
     limit: int = Query(20, ge=1, le=100),
     cursor: Optional[str] = Query(None),
-    token = Depends(get_current_token),
+    token = Depends(get_current_token_cookie_or_header),
 ):
     current_user_id = int(token["sub"])
     return user_service.list_my_following(current_user_id, limit=limit, cursor=cursor)
@@ -92,7 +97,7 @@ def get_my_following(
 def get_my_followers(
     limit: int = Query(20, ge=1, le=100),
     cursor: Optional[str] = Query(None),
-    token = Depends(get_current_token),
+    token = Depends(get_current_token_cookie_or_header),
 ):
     current_user_id = int(token["sub"])
     return user_service.list_my_followers(current_user_id, limit=limit, cursor=cursor)
@@ -102,7 +107,7 @@ def get_my_followers(
 def get_my_puzzle_likes(
     limit: int = Query(20, ge=1, le=100),
     cursor: Optional[str] = Query(None),
-    token = Depends(get_current_token),
+    token = Depends(get_current_token_cookie_or_header),
 ):
     current_user_id = int(token["sub"])
     return user_service.list_my_puzzle_likes(current_user_id, limit, cursor)
@@ -112,7 +117,7 @@ def get_my_puzzle_likes(
 def get_all_my_solves(
     limit: int = Query(20, ge=1, le=100),
     cursor: Optional[str] = Query(None),
-    token = Depends(get_current_token),
+    token = Depends(get_current_token_cookie_or_header),
 ):
     current_user_id = int(token["sub"])
     return user_service.list_all_my_solves(current_user_id, limit, cursor)

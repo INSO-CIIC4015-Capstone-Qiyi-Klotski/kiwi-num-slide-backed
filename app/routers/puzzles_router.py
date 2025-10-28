@@ -9,11 +9,14 @@ from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedRes
 from app.services import puzzle_service, puzzle_generation
 from datetime import date as _date
 
+from app.core.security import get_current_token_cookie_or_header
+from app.core.cookies import require_csrf
+
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
 
 
 @router.post("", response_model=PuzzleOut, status_code=status.HTTP_201_CREATED)
-def create_puzzle(payload: PuzzleCreate, token=Depends(get_current_token), response: Response = None):
+def create_puzzle(payload: PuzzleCreate, token=Depends(get_current_token_cookie_or_header), response: Response = None, _csrf = Depends(require_csrf) ):
     author_id = int(token["sub"])
     data = puzzle_service.create_puzzle(
         author_id=author_id,
@@ -71,7 +74,8 @@ def get_puzzle(puzzle_id: int = Path(..., ge=1), response: Response = None):
 def patch_puzzle(
     puzzle_id: int = Path(..., ge=1),
     payload: PuzzleUpdate = None,
-    token = Depends(get_current_token),
+    token = Depends(get_current_token_cookie_or_header),
+    _csrf = Depends(require_csrf),
 ):
     current_user_id = int(token["sub"])
     return puzzle_service.patch_puzzle(
@@ -89,7 +93,8 @@ def patch_puzzle(
 @router.delete("/{puzzle_id}", response_model=PuzzleDeleteAck)
 def delete_puzzle(
     puzzle_id: int = Path(..., ge=1),
-    token = Depends(get_current_token),
+    token=Depends(get_current_token_cookie_or_header),
+    _csrf=Depends(require_csrf),
 ):
     current_user_id = int(token["sub"])
     return puzzle_service.delete_puzzle(current_user_id=current_user_id, puzzle_id=puzzle_id)
@@ -120,7 +125,8 @@ def browse_puzzles(
 @router.post("/{puzzle_id}/like", response_model=LikeAck)
 def like_puzzle(
     puzzle_id: int = Path(..., ge=1),
-    token = Depends(get_current_token),
+    token=Depends(get_current_token_cookie_or_header),
+    _csrf=Depends(require_csrf),
 ):
     user_id = int(token["sub"])
     return puzzle_service.like_puzzle(current_user_id=user_id, puzzle_id=puzzle_id)
@@ -129,7 +135,8 @@ def like_puzzle(
 @router.delete("/{puzzle_id}/like", response_model=LikeAck)
 def unlike_puzzle(
     puzzle_id: int = Path(..., ge=1),
-    token = Depends(get_current_token),
+    token=Depends(get_current_token_cookie_or_header),
+    _csrf=Depends(require_csrf),
 ):
     user_id = int(token["sub"])
     return puzzle_service.unlike_puzzle(current_user_id=user_id, puzzle_id=puzzle_id)
@@ -151,7 +158,8 @@ def get_puzzle_likes_count(
 def submit_solve(
     puzzle_id: int = Path(..., ge=1),
     payload: PuzzleSolveCreate = None,
-    token = Depends(get_current_token),
+    token=Depends(get_current_token_cookie_or_header),
+    _csrf=Depends(require_csrf),
 ):
     user_id = int(token["sub"])
     return puzzle_service.submit_puzzle_solve(
@@ -169,7 +177,8 @@ def get_my_solves_for_puzzle(
     puzzle_id: int = Path(..., ge=1),
     limit: int = Query(20, ge=1, le=100),
     cursor: Optional[str] = Query(None),
-    token = Depends(get_current_token),
+    token=Depends(get_current_token_cookie_or_header),
+    _csrf=Depends(require_csrf),
 ):
     user_id = int(token["sub"])
     return puzzle_service.list_my_solves_for_puzzle(

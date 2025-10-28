@@ -1,7 +1,10 @@
 import jwt
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response, Request, Cookie
+
 
 from ..core import security
+from ..core.cookies import set_auth_cookies, set_csrf_cookie, REFRESH_COOKIE, clear_auth_cookies, require_csrf
+from ..core.security import get_current_token_cookie_or_header, get_current_token_optional_cookie_or_header
 from ..repositories import users_repo
 from ..schemas.auth_schema import RegisterIn, UserOut, VerifyEmailIn, LoginOut, LoginIn, RefreshOut, RefreshIn, \
     StatusOut
@@ -30,8 +33,18 @@ def confirm_verification_via_get(token: str = Query(...)):
 
 
 @router.post("/login", response_model=LoginOut)
-def login(body: LoginIn):
+def login(body: LoginIn, response: Response, request: Request):
+    """
+    Login tradicional: devuelve JSON como antes
+    **y** ahora además setea cookies HttpOnly (access/refresh) y csrf.
+    """
     result = auth_service.login_user(body.email, body.password)
+
+    prod = request.url.scheme == "https"
+    set_auth_cookies(response, result["access_token"], result["refresh_token"], prod=prod)
+    # Puedes usar un token aleatorio firmado. Aquí, para demo, algo estable:
+    set_csrf_cookie(response, token="csrf-" + result["user"]["email"], prod=prod)
+
     return {
         "access_token": result["access_token"],
         "refresh_token": result["refresh_token"],
@@ -41,10 +54,25 @@ def login(body: LoginIn):
     }
 
 
-@router.post("/refresh")
-def refresh_token_route(body: RefreshIn):   # RefreshIn: { refresh_token: str }
+@router.post("/refresh", response_model=RefreshOut)
+def refresh_token_route(
+    response: Response,
+    request: Request,
+    body: RefreshIn | None = None,
+    refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE),
+    _csrf = Depends(require_csrf),
+):
+    """
+    Refresca usando:
+    - Preferentemente la cookie HttpOnly 'refresh_token'
+    - Como fallback, acepta el body {refresh_token} para compatibilidad.
+    """
+    refresh_token = refresh_cookie or (body.refresh_token if body else None)
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Missing refresh token")
+
     try:
-        data = security.decode_token(body.refresh_token)
+        data = security.decode_token(refresh_token)
         security.require_token_type(data, "refresh")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
@@ -52,30 +80,29 @@ def refresh_token_route(body: RefreshIn):   # RefreshIn: { refresh_token: str }
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     user_id = int(data["sub"])
-    email   = data["email"]
+    email = data["email"]
 
-    # (Opcional) revisa en DB que el user siga activo, no bloqueado, etc.
+    new_access = security.create_access_token(user_id, email)
+    # Si rotas refresh, créalo aquí y vuelve a setearlo
 
-    new_access  = security.create_access_token(user_id, email)
-    # (Opcional) rotación:
-    # new_refresh = security.create_refresh_token(user_id, email)
+    set_auth_cookies(response, new_access, None, prod=(request.url.scheme == "https"))
+    return {"access_token": new_access, "token_type": "bearer"}
 
-    return {
-        "access_token": new_access,
-        "token_type": "bearer",
-        # "refresh_token": new_refresh,   # si implementas rotación
-    }
+
+@router.post("/logout")
+def logout(response: Response, request: Request):
+    clear_auth_cookies(response, prod=(request.url.scheme == "https"))
+    return {"ok": True}
 
 
 
 @router.get("/me", response_model=UserOut)
-def read_me(token_data: dict = Depends(security.get_current_token)):
+def read_me(token_data: dict = Depends(security.get_current_token_cookie_or_header)):
     """
-    Endpoint protegido: requiere Authorization: Bearer <access_token>.
+    Protegido: ahora acepta Authorization: Bearer ... **o** cookie 'access_token'.
     """
     user_id = int(token_data["sub"])
     user = users_repo.get_user_by_id(user_id)
-    # adapta a tu repo: users_repo.get_user_by_id debe existir; si no, crea una función similar
     return {
         "id": user["id"],
         "name": user["name"],
@@ -85,10 +112,10 @@ def read_me(token_data: dict = Depends(security.get_current_token)):
 
 
 @router.get("/status", response_model=StatusOut)
-def auth_status(token_data: dict | None = Depends(security.get_current_token_optional)):
+def auth_status(token_data: dict | None = Depends(get_current_token_optional_cookie_or_header)):
     """
-    Si hay access token válido -> devuelve { verified, user } desde la DB.
-    Si no hay token (o inválido/expirado) -> { verified: False, user: None }.
+    Si hay access token válido (header o cookie) -> { verified, user }.
+    Si no -> { verified: False, user: None }.
     """
     if not token_data:
         return {"verified": False, "user": None}

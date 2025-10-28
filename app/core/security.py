@@ -3,7 +3,7 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request, Cookie
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
 from starlette import status
@@ -131,6 +131,56 @@ def get_current_token_optional(
     if not creds or not creds.credentials:
         return None
     token = creds.credentials
+    try:
+        data = decode_token(token)
+        require_token_type(data, "access")
+        return data
+    except Exception:
+        return None
+
+
+def get_current_token_cookie_or_header(
+    request: Request,
+    creds: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
+    access_cookie: str | None = Cookie(default=None, alias="access_token"),
+) -> dict:
+    """
+    Intenta primero Bearer, si no hay, cae a la cookie 'access_token'.
+    """
+    token = None
+    if creds and creds.credentials:
+        token = creds.credentials
+    elif access_cookie:
+        token = access_cookie
+
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+
+    try:
+        data = decode_token(token)
+        require_token_type(data, "access")
+        return data
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+def get_current_token_optional_cookie_or_header(
+    request: Request,
+    creds: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
+    access_cookie: str | None = Cookie(default=None, alias="access_token"),
+) -> dict | None:
+    """
+    Versión opcional: devuelve None si no hay token o si es inválido/expirado.
+    """
+    token = None
+    if creds and creds.credentials:
+        token = creds.credentials
+    elif access_cookie:
+        token = access_cookie
+    if not token:
+        return None
     try:
         data = decode_token(token)
         require_token_type(data, "access")
