@@ -1,6 +1,6 @@
 import jwt
 from fastapi import APIRouter, HTTPException, Depends, Response, Request, Cookie
-
+from secrets import token_urlsafe
 
 from ..core import security
 from ..core.cookies import set_auth_cookies, set_csrf_cookie, REFRESH_COOKIE, clear_auth_cookies, require_csrf
@@ -43,7 +43,8 @@ def login(body: LoginIn, response: Response, request: Request):
     prod = request.url.scheme == "https"
     set_auth_cookies(response, result["access_token"], result["refresh_token"], prod=prod)
     # Puedes usar un token aleatorio firmado. Aquí, para demo, algo estable:
-    set_csrf_cookie(response, token="csrf-" + result["user"]["email"], prod=prod)
+    csrf = token_urlsafe(32)  # p.ej. 'pQzqf2...'; solo [A-Za-z0-9-_]
+    set_csrf_cookie(response, token=csrf, prod=prod)
 
     return {
         "access_token": result["access_token"],
@@ -60,7 +61,6 @@ def refresh_token_route(
     request: Request,
     body: RefreshIn | None = None,
     refresh_cookie: str | None = Cookie(default=None, alias=REFRESH_COOKIE),
-    _csrf = Depends(require_csrf),
 ):
     """
     Refresca usando:
