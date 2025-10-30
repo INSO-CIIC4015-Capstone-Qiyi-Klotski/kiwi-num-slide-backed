@@ -179,15 +179,17 @@ class Puzzle:
     @staticmethod
     def _normalize_number_choices(choices: Optional[List[int]]) -> List[int]:
         if choices is None:
-            return list(range(2, 10))
+            return list(range(1, 10))
         if not isinstance(choices, list) or len(choices) == 0:
             raise ValueError("numbers_choices must be a non-empty list or None.")
         cleaned = []
         for v in choices:
             if not isinstance(v, int):
                 raise ValueError(f"numbers_choices contains a non-integer value: {v}")
-            if v < 2:
-                raise ValueError(f"numbers_choices contains a value < 2: {v}")
+            if v < 1:
+                raise ValueError(f"numbers_choices contains a value < 1: {v}")
+            if v > 9:
+                raise ValueError(f"numbers_choices contains a value > 9: {v}")
             cleaned.append(v)
         return cleaned
 
@@ -247,8 +249,8 @@ class Puzzle:
             if cnt > 0:
                 ops_pool.extend([op] * cnt)
         for _ in range(remaining):
-            ops_pool.append(random.choice(self.op_unlimited))
-        random.shuffle(ops_pool)  # avoid patterned placement
+            ops_pool.append(self._rng.choice(self.op_unlimited))
+        self._rng.shuffle(ops_pool)  # avoid patterned placement
 
         # Target structure lengths:
         # between-columns per row
