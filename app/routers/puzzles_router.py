@@ -205,7 +205,7 @@ def generate_puzzles(
     if not expected or provided != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    return puzzle_generation.generate_and_store_puzzles(**cfg.dict())
+    return puzzle_generation.generate_and_store_puzzles(**cfg.model_dump())
 
 
 @router.post("/daily/ensure")
