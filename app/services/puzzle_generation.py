@@ -693,3 +693,76 @@ def generate_and_store_puzzles(
         "difficulty": difficulty,
         "N": N,
     }
+
+
+def completes_col(idx):
+    return 0
+
+
+def completes_row(idx):
+    return 0
+
+
+def solve_all(self, max_solutions: Optional[int] = None, store: bool = False) -> List[List[int]]:
+    N = self.N
+    # Indices of all cells except the bottom-right blank space
+    fill_order: List[int] = [i for i in range(N * N) if i != (N * N - 1)]
+    # Initialize an empty board and a pool of available numbers
+    board: List[Optional[int]] = [None] * (N * N)
+    pool = Counter(self.numbers)
+    # List to store all valid solutions found
+    solutions: List[List[int]] = []
+
+    def place(k: int) -> None:
+        """Recursive helper that attempts to fill position 'k'."""
+        # Base case: all cells filled -> store the current configuration
+        if k == len(fill_order):
+            sol = [board[i] for i in fill_order]
+            solutions.append([int(v) for v in sol])
+            return
+
+        idx = fill_order[k]
+
+        # Sort remaining candidates by how few copies remain (MRV heuristic)
+        candidates = [v for v, cnt in pool.items() if cnt > 0]
+        candidates.sort(key=lambda v: (pool[v], v))
+
+        for val in candidates:
+            board[idx] = val
+            pool[val] -= 1
+
+            # Validate the row when it becomes complete
+            rr = completes_row(idx)
+            if rr is not None and not self._row_is_valid(board, rr):
+                pool[val] += 1
+                board[idx] = None
+                continue
+
+            # Validate the column when it becomes complete
+            cc = completes_col(idx)
+            if cc is not None and not self._col_is_valid(board, cc):
+                pool[val] += 1
+                board[idx] = None
+                continue
+
+            # Recurse to the next position
+            place(k + 1)
+
+            # Stop early if the desired number of solutions is reached
+            if max_solutions is not None and len(solutions) >= max_solutions:
+                pool[val] += 1
+                board[idx] = None
+                return
+
+            # Backtrack: undo placement and restore the number count
+            pool[val] += 1
+            board[idx] = None
+
+    # Start recursive placement
+    place(0)
+
+    # Optionally store solutions in the object for later retrieval
+    if store:
+        self.solutions = [sol[:] for sol in solutions]
+
+    return solutions

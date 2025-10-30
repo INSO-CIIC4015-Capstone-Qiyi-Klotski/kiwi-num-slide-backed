@@ -3,7 +3,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException, Header
 from app.core.security import get_current_token
-from app.schemas.puzzle_generation_schema import PuzzleGenConfig
+from app.schemas.puzzle_generation_schema import PuzzleGenConfig, GenerateAck, generate_puzzles_responses
 from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
     PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount, PuzzleSolveOut, PuzzleSolveCreate, MySolvesPage, DailyPuzzleOut
 from app.services import puzzle_service, puzzle_generation
@@ -189,8 +189,12 @@ def get_my_solves_for_puzzle(
     )
 
 
-
-@router.post("/generate", status_code=201)
+@router.post(
+    "/generate",
+    status_code=201,
+    response_model=GenerateAck,
+    responses=generate_puzzles_responses,
+)
 def generate_puzzles(
     cfg: PuzzleGenConfig,
     secret: Optional[str] = Query(None),
