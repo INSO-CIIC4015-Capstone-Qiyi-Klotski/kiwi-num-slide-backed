@@ -7,11 +7,21 @@ from app.core.cookies import ACCESS_COOKIE, REFRESH_COOKIE
 client = TestClient(app)
 
 def test_login_sets_cookies(monkeypatch, client):
+    """
+        Ensures that the /auth/login endpoint sets authentication cookies correctly.
+
+        This test:
+        - Mocks a successful login via auth_service.login_user.
+        - Sends a POST request to /auth/login with valid credentials.
+        - Asserts that the response has status 200 and returns both tokens and user info.
+        - Confirms that cookies for access, refresh, and CSRF tokens are properly set.
+        - Optionally checks that Set-Cookie headers include HttpOnly for security.
+        """
     fake_login = {
         "access_token": "acc",
         "refresh_token": "ref",
         "token_type": "bearer",
-        "user": {"id": 1, "name": "A", "email": "a@b.com", "is_verified": True},  # <-- faltaba
+        "user": {"id": 1, "name": "A", "email": "a@b.com", "is_verified": True},
         "needs_verification": False,
     }
     monkeypatch.setattr(auth_service, "login_user", lambda email, password: fake_login)
@@ -31,11 +41,20 @@ def test_login_sets_cookies(monkeypatch, client):
     assert "refresh_token" in client.cookies
     assert "csrf_token" in client.cookies
 
-    # (Opcional) verifica flags básicos de Set-Cookie en los headers
+    #verifica flags básicos de Set-Cookie en los headers
     set_cookie_headers = [h for h in r.headers.get_list("set-cookie")]
     assert any("HttpOnly" in h for h in set_cookie_headers)
 
 def test_refresh_uses_cookie(monkeypatch):
+    """
+        Validates that the /auth/refresh endpoint issues a new access token using the refresh cookie.
+
+        This test:
+        - Mocks token decoding and creation functions from app.core.security.
+        - Inserts a refresh cookie into the test client.
+        - Sends a POST request to /auth/refresh.
+        - Verifies that the endpoint returns status 200 and a new access token string.
+        """
     # Decodificar/validar token lo hace security internamente; aquí solo verificamos flujo del endpoint
     from app.core import security
     monkeypatch.setattr(security, "decode_token", lambda t: {"sub":"1","email":"a@b.com","type":"refresh"})

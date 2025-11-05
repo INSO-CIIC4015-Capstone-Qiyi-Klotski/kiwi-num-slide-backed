@@ -5,7 +5,14 @@ import pytest
 
 def test_daily_puzzle_404_when_not_configured(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     """
-    When the service reports no daily puzzle is configured, the endpoint must return 404 with the expected detail.
+    Ensures that the /puzzles/daily-puzzle endpoint returns 404 when no daily puzzle is configured.
+
+    This test:
+    - Mocks puzzle_service.get_today_daily_puzzle() to return None.
+    - Sends a GET request to /puzzles/daily-puzzle.
+    - Verifies that the endpoint responds with HTTP 404.
+    - Confirms that the response JSON includes the correct 'detail' message:
+      "Daily puzzle not configured for today".
     """
     from app.services import puzzle_service
 
@@ -18,7 +25,16 @@ def test_daily_puzzle_404_when_not_configured(client: TestClient, monkeypatch: p
 
 def test_daily_puzzle_200_ok_and_cache_header(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     """
-    Returns 200 with a valid DailyPuzzleOut payload and sets CDN-friendly Cache-Control headers.
+    Verifies that the /puzzles/daily-puzzle endpoint returns a valid daily puzzle
+    and sets appropriate caching headers for CDN optimization.
+
+    This test:
+    - Mocks puzzle_service.get_today_daily_puzzle() to return a fake DailyPuzzleOut payload.
+    - Sends a GET request to /puzzles/daily-puzzle.
+    - Confirms that the response has status 200 and includes the correct JSON structure.
+    - Validates that puzzle attributes (id, size, difficulty, author) match the mock payload.
+    - Asserts that the 'Cache-Control' header is properly set to
+      "public, s-maxage=300, stale-while-revalidate=60".
     """
     from app.services import puzzle_service
 

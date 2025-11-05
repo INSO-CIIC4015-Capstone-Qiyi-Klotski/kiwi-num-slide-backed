@@ -4,7 +4,13 @@ import pytest
 
 def test_get_puzzle_404_not_found(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     """
-    Returns 404 when the service doesn't find the puzzle by ID.
+    Ensures that the /puzzles/{id} endpoint returns 404 when the requested puzzle does not exist.
+
+    This test:
+    - Mocks puzzle_service.get_puzzle_details() to always return None.
+    - Sends a GET request to /puzzles/539 (nonexistent puzzle ID).
+    - Verifies that the endpoint responds with HTTP 404 Not Found.
+    - Confirms that the response JSON contains {"detail": "Puzzle not found"}.
     """
     from app.services import puzzle_service
 
@@ -18,7 +24,15 @@ def test_get_puzzle_404_not_found(client: TestClient, monkeypatch: pytest.Monkey
 
 def test_get_puzzle_200_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     """
-    Returns 200 with valid puzzle details and sets proper cache headers.
+    Verifies that the /puzzles/{id} endpoint returns correct puzzle data when found.
+
+    This test:
+    - Mocks puzzle_service.get_puzzle_details() to return a fake puzzle record.
+    - Sends a GET request to /puzzles/539.
+    - Ensures the endpoint responds with HTTP 200 OK.
+    - Validates that the JSON body contains accurate puzzle details (id, title, size, difficulty, author).
+    - Asserts that the 'Cache-Control' header matches the expected value for ISR caching:
+      "public, s-maxage=300, stale-while-revalidate=60".
     """
     from app.services import puzzle_service
 

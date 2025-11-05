@@ -6,9 +6,22 @@ from app.services import puzzle_service
 client = TestClient(app)
 
 def _auth_headers():
+    """Helper function that returns simulated authentication and CSRF headers."""
     return {"Authorization": "Bearer faketoken", "X-CSRF-Token": "csrf123"}
 
 def test_submit_solve_and_list_me(monkeypatch, client):
+    """
+        Verifies the full flow of submitting a puzzle solve and retrieving the user's solve history.
+
+        This test:
+        - Mocks `puzzle_service.submit_puzzle_solve` to simulate successful solve submission.
+        - Mocks `puzzle_service.list_my_solves_for_puzzle` to simulate a paginated response of past solves.
+        - Sends a POST request to `/puzzles/{id}/solves` with move data and duration.
+        - Verifies that the server responds with HTTP 201 (Created) and a valid JSON payload.
+        - Sends a GET request to `/puzzles/{id}/solves/me` to fetch the user's solves.
+        - Ensures that the response returns HTTP 200 with correct movement data.
+        - Confirms the expected structure of the solve history page, including `items` and `next_cursor`.
+        """
     fake_out = {
         "id": 1, "user_id": 9, "puzzle_id": 555,
         "movements": 20, "duration_ms": 12345,

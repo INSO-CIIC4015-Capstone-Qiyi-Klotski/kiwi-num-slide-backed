@@ -6,6 +6,16 @@ from app.services import puzzle_service
 client = TestClient(app)
 
 def test_browse_puzzles_ok(monkeypatch):
+    """
+        Ensures that the /puzzles browsing endpoint returns a valid paginated response.
+
+        This test:
+        - Mocks the puzzle_service.browse_puzzles_public() function to return a fake page.
+        - Sends a GET request to /puzzles with limit and sort query parameters.
+        - Verifies that the response has HTTP 200 status code.
+        - Confirms that the JSON body contains expected fields: items list and next_cursor.
+        - Checks that the returned puzzle data matches the mock (ID and title correctness).
+        """
     fake_page = {
         "items": [
             {

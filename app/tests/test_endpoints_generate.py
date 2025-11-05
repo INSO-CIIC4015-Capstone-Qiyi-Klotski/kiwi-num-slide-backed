@@ -4,6 +4,7 @@ import pytest
 
 
 def _payload():
+    """Helper function returning a valid JSON payload matching the PuzzleGenConfig schema."""
     # JSON que coincide con PuzzleGenConfig
     return {
         "count": 1,
@@ -19,6 +20,15 @@ def _payload():
 
 
 def test_generate_requires_secret_403(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """
+        Ensures that /puzzles/generate rejects requests without the correct secret.
+
+        This test:
+        - Removes the GENERATION_SECRET environment variable to simulate missing configuration.
+        - Sends a POST request to /puzzles/generate without a secret.
+        - Verifies that the response has HTTP 403 Forbidden status.
+        - Confirms that the JSON body contains {"detail": "Forbidden"}.
+        """
     monkeypatch.delenv("GENERATION_SECRET", raising=False)
 
     r = client.post("/puzzles/generate", json=_payload())
@@ -27,6 +37,17 @@ def test_generate_requires_secret_403(client: TestClient, monkeypatch: pytest.Mo
 
 
 def test_generate_201_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """
+        Verifies that /puzzles/generate successfully triggers puzzle generation
+        when the correct secret is provided.
+
+        This test:
+        - Sets the GENERATION_SECRET environment variable to "top-secret".
+        - Mocks puzzle_generation.generate_and_store_puzzles() to return fake generation stats.
+        - Sends a POST request to /puzzles/generate with the proper secret query parameter.
+        - Ensures that the endpoint returns HTTP 201 Created.
+        - Validates that the JSON response contains correct keys (requested, inserted, N, difficulty).
+        """
     monkeypatch.setenv("GENERATION_SECRET", "top-secret")
 
     # Mockea la función de generación/almacenamiento para no tocar DB real

@@ -4,7 +4,14 @@ from fractions import Fraction
 from app.services.puzzle_generation import Puzzle, _fraction_to_string, _string_to_fraction
 
 def test_operator_spec_mixed_modes():
-    """Validates that operator specifications mixing unlimited and exact counts (e.g., '+', '*2') are normalized correctly."""
+    """
+    Verifies that mixed operator specifications (e.g., '+', '*2') are normalized properly.
+
+    This test:
+    - Creates puzzles using a combination of unlimited and fixed-count operator specifications.
+    - Confirms that operators are generated in correct quantities according to N and specification.
+    - Ensures total operator count follows 2*N*(N-1)-2.
+    """
     p1 = Puzzle(N=3, use_daily_seed=False, seed=1, operators_spec=[('+',), ('*', 2)])
     assert p1.N == 3
     assert p1.operators.count("*") == 2
@@ -22,7 +29,13 @@ def test_operator_spec_mixed_modes():
 
 
 def test_number_choices_out_of_range():
-    """Ensures ValueError is raised when 'numbers_choices' includes values below 1 or above 9."""
+    """
+    Ensures that invalid number ranges trigger ValueError exceptions.
+
+    This test:
+    - Attempts to create puzzles where `numbers_choices` contains invalid values (<1 or >9).
+    - Verifies that a ValueError is raised for each invalid configuration.
+    """
     with pytest.raises(ValueError):
         Puzzle(N=3, use_daily_seed=False, seed=2, numbers_choices=[10])
 
@@ -32,7 +45,14 @@ def test_number_choices_out_of_range():
 
 @pytest.mark.parametrize("N", [3, 4, 5, 6, 7])
 def test_row_col_op_lengths_respect_blank_edges(N):
-    """🧩 Checks that operator grids omit operations adjacent to the blank cell at bottom-right corner."""
+    """
+    Validates that operator grids correctly omit operations adjacent to the blank cell.
+
+    This test:
+    - Builds puzzles of different sizes (N = 3–7).
+    - Ensures that the last row and column have one fewer operator (blank cell area).
+    - Confirms that both row and column operation lengths match expected layout rules.
+    """
     p = Puzzle(N=N, use_daily_seed=False, seed=123, operators_spec=[('+',), ('-',)])
     for r in range(N):
         row_ops = p._row_ops(r)
@@ -45,21 +65,37 @@ def test_row_col_op_lengths_respect_blank_edges(N):
 
 @pytest.mark.parametrize("N", [3, 4, 5, 6, 7])
 def test_total_operator_count_matches_formula(N):
-    """🧮 Confirms total operator count follows formula 2*N*(N-1)-2."""
+    """
+    Confirms that total operator count matches the expected formula: 2*N*(N-1) - 2.
+    """
     p = Puzzle(N=N, use_daily_seed=False, seed=7, operators_spec=[('+',), ('-',)])
     assert len(p.operators) == 2*N*(N-1) - 2
 
 
 
 def test_fraction_string_roundtrip_covers_integers_and_proper_fractions():
-    """🔁 Ensures that Fraction objects serialize and deserialize correctly to string format."""
+    """
+    Ensures Fractions serialize and deserialize correctly using the string conversion helpers.
+
+    This test:
+    - Iterates over integer and proper Fraction objects.
+    - Converts them to string form using `_fraction_to_string`.
+    - Converts back using `_string_to_fraction`.
+    - Confirms the roundtrip preserves exact numerical equivalence.
+    """
     cases = [Fraction(5,1), Fraction(-3,1), Fraction(7,3), Fraction(-11,4)]
     for fr in cases:
         s = _fraction_to_string(fr)
         assert _string_to_fraction(s) == fr
 
 def test_is_equal_to_same_seed_same_spec():
-    """Confirms that identical puzzles (same seed/spec) are structurally equal."""
+    """
+    Verifies that puzzles with identical seed and operator specs are structurally equal.
+
+    This test:
+    - Creates pairs of puzzles with the same parameters.
+    - Confirms `is_equal_to()` returns True for each identical pair.
+    """
     for i in range(100):
         p1 = Puzzle(N=4, use_daily_seed=False, seed=42, operators_spec=[('+',), ('-',)], shuffle_after_expected=False)
         p2 = Puzzle(N=4, use_daily_seed=False, seed=42, operators_spec=[('+',), ('-',)], shuffle_after_expected=False)
@@ -67,7 +103,9 @@ def test_is_equal_to_same_seed_same_spec():
         assert p1.is_equal_to(p2)
 
 def test_is_equal_to_different_operator_spec_is_false():
-    """Confirms that puzzles with different operator specs are not considered equal."""
+    """
+    Verifies that puzzles with different operator specs are not considered equal.
+    """
     for i in range(100):
         p1 = Puzzle(N=4, use_daily_seed=False, seed=42, operators_spec=[('+',), ('-',)])
         p2 = Puzzle(N=4, use_daily_seed=False, seed=42, operators_spec=[('+',), ('*', 2)])
@@ -75,8 +113,12 @@ def test_is_equal_to_different_operator_spec_is_false():
 
 def test_eval_line_with_precedence_basic_cases():
     """
-    Validates the atomic precedence evaluator on hand-crafted inputs,
-    without involving any board/layout logic.
+    Validates that arithmetic precedence is respected in isolated expressions.
+
+    This test:
+    - Checks precedence of *, / over + and - using simple expressions.
+    - Covers mixed operator combinations (add, subtract, multiply, divide).
+    - Ensures division by zero returns None instead of raising.
     """
     # 2 + 3*4 = 14  (multiplication before addition)
     assert Puzzle._eval_line_with_precedence([2,3,4], ['+','*']) == Fraction(14,1)
