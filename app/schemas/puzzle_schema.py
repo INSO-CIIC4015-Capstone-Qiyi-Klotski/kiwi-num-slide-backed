@@ -75,9 +75,15 @@ class PuzzleListItem(BaseModel):
     created_at: str
     author: Optional[Dict[str, Any]] = None  # { id, slug, display_name, avatar_url? }
 
+    likes_count: int = 0
+    solves_count: int = 0
+    generated_by: Optional[str] = None  # "algorithm" | "user"
+
+    operators: List[str] = []  # ["add", "sub", "mul", "div"]
+
 class PuzzleListPage(BaseModel):
     items: List[PuzzleListItem]
-    next_cursor: Optional[str] = None  # último id de la página (opaco)
+    next_cursor: Optional[str] = None
 
 
 class LikeAck(BaseModel):

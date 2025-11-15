@@ -93,19 +93,20 @@ def make_rng(seed: int) -> random.Random:
 OPS = ["+", "-", "*", "/"]  # division is included for future engine support
 
 
-def gen_board_spec(N: int, rng: random.Random) -> dict:
+def gen_board_spec(N: int, rng: random.Random, ops) -> dict:
     """Build a random board specification for an N x N puzzle."""
     # numbers: N*N - 1
     numbers = [rng.randint(1, 9) for _ in range(N * N - 1)]
 
     # operators: 2*N*(N-1) - 2
     op_len = 2 * N * (N - 1) - 2
-    operators = [rng.choice(OPS) for _ in range(op_len)]
+    operators = [rng.choice(ops) for _ in range(op_len)]
 
     # expected: 2*N target values (rows + columns)
     expected = [rng.randint(-20, 40) for _ in range(2 * N)]
 
     return {"N": N, "numbers": numbers, "expected": expected, "operators": operators}
+
 
 
 def gen_solution_from_board(board_spec: dict) -> dict:
@@ -126,6 +127,7 @@ LAST_NAMES = [
     "Rivera", "Santos", "Martínez", "García", "Núñez", "Ramírez", "Torres", "Díaz", "Vega",
     "Pérez", "López", "Rodríguez", "Castro", "Ramos", "Gómez", "Mendoza", "Suárez", "Figueroa",
 ]
+ANIMAL_AVATARS = ["giraffe", "hippo", "leon", "monkey", "zebra"]
 
 
 def slugify(s: str) -> str:
@@ -144,7 +146,11 @@ def gen_users(rng: random.Random, count: int):
         email = f"{base}{i}@example.com"
         pwd_hash = "hash$" + "".join(rng.choice(string.hexdigits.lower()) for _ in range(32))
         is_verified = rng.random() < 0.85
-        avatar_key = None if rng.random() < 0.3 else f"avatars/{base}-{i}.png"
+
+        # Siempre un avatar válido
+        animal = rng.choice(ANIMAL_AVATARS)
+        avatar_key = f"avatars/{animal}.png"
+
         users.append((name, email, pwd_hash, is_verified, avatar_key))
     return users
 
@@ -153,12 +159,31 @@ def gen_puzzles(rng: random.Random, count: int, user_ids):
     """Generate puzzles with random size, board specs, and optional authors."""
     puzzles = []
     for _ in range(count):
+        # author_id puede ser NULL (puzzles generados por el algoritmo)
         author_id = rng.choice(user_ids) if rng.random() < 0.9 else None
         title = f"Puzzle #{rng.randint(1000, 9999)}"
         N = rng.choice([3, 4, 5])
-        board_spec = gen_board_spec(N, rng)
-        diff = rng.choice([None, 1, 2, 3, 4, 5, None, None])
-        num_solutions = None if rng.random() < 0.5 else rng.randint(1, 6)
+
+        # Elegir qué operadores se permiten según si tiene autor o no
+        if author_id is None:
+            # Puzzles "del algoritmo": solo suma/resta o solo multiplicación/división
+            choice = rng.random()
+            if choice < 0.3:
+                allowed_ops = ["+"]
+            elif choice < .6:
+                allowed_ops = ["+", "-"]
+            else:
+                allowed_ops = ["*", "/"]
+        else:
+            # Puzzles con autor: usan el set completo
+            allowed_ops = OPS
+
+        board_spec = gen_board_spec(N, rng, allowed_ops)
+
+        # Sin NULLs en dificultad ni num_solutions
+        diff = rng.randint(1, 5)          # dificultad 1–5 siempre
+        num_solutions = rng.randint(1, 6) # al menos 1 solución
+
         puzzles.append((author_id, title, N, board_spec, num_solutions, diff))
     return puzzles
 

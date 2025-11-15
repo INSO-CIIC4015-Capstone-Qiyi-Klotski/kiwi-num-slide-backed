@@ -108,10 +108,31 @@ def browse_puzzles(
     sort: str = Query("created_at_desc"),
     limit: int = Query(20, ge=1, le=100),
     cursor: Optional[str] = Query(None),
+    # 👇 nombres que vienen del FE (camelCase) usando alias
+    min_likes: Optional[int] = Query(None, ge=0, alias="minLikes"),
+    author_id: Optional[int] = Query(None, ge=1, alias="authorId"),
+    generated_by: Optional[str] = Query(
+        None,
+        alias="generatedBy",
+        description="algorithm | user",
+    ),
+    operators: Optional[str] = Query(
+        None,
+        alias="operators",
+        description="lista separada por comas: add,sub,mul,div",
+    ),
 ):
     try:
         data = puzzle_service.browse_puzzles_public(
-            limit=limit, cursor=cursor, size=size, q=q, sort=sort
+            limit=limit,
+            cursor=cursor,
+            size=size,
+            q=q,
+            sort=sort,
+            min_likes=min_likes,
+            author_id=author_id,
+            generated_by=generated_by,
+            operators=operators,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

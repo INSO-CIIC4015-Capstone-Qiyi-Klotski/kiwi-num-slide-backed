@@ -144,12 +144,22 @@ def delete_puzzle_owned(puzzle_id: int, author_id: int) -> bool:
 
 
 def browse_puzzles_public(
-    *, limit: int, cursor_id: Optional[int], size: Optional[int], q: Optional[str]
+    *,
+    limit: int,
+    cursor_id: Optional[int],
+    size: Optional[int],
+    q: Optional[str],
+    sort: str,
+    min_likes: Optional[int],
+    author_id: Optional[int],
+    generated_by: Optional[str],
+    operators: Optional[List[str]],
 ) -> List[Dict[str, Any]]:
     """
-    Lista puzzles públicos (ligeros) con filtros y paginación por id DESC.
-    Retorna hasta limit+1 filas para detectar 'has_more'.
+    Public puzzle listing with filters and id-based cursor pagination (descending).
+    Returns up to limit+1 rows to detect "has_more".
     """
+
     sql = """
         SELECT
             p.id,
@@ -157,28 +167,99 @@ def browse_puzzles_public(
             p.size,
             p.difficulty,
             p.created_at,
-            u.id   AS author_id,
-            u.name AS author_name,
-            u.avatar_key AS author_avatar_key
+            u.id          AS author_id,
+            u.name        AS author_name,
+            u.avatar_key  AS author_avatar_key,
+            COUNT(DISTINCT pl.id) AS likes_count,
+            COUNT(DISTINCT ps.id) AS solves_count,
+            p.board_spec->'operators' AS operators_raw
         FROM puzzles p
-        LEFT JOIN users u ON u.id = p.author_id
+        LEFT JOIN users u          ON u.id = p.author_id
+        LEFT JOIN puzzle_likes pl  ON pl.puzzle_id = p.id
+        LEFT JOIN puzzle_solves ps ON ps.puzzle_id = p.id
         WHERE 1=1
     """
     params: Dict[str, Any] = {"limit": limit + 1}
 
+    # size filter
     if size is not None:
         sql += " AND p.size = :size"
         params["size"] = size
 
+    # free-text search by title
     if q:
         sql += " AND p.title ILIKE :q_like"
         params["q_like"] = f"%{q}%"
 
+    # author filter
+    if author_id is not None:
+        sql += " AND p.author_id = :author_id"
+        params["author_id"] = author_id
+
+    # generatedBy filter: algorithm vs user
+    if generated_by == "algorithm":
+        sql += " AND p.author_id IS NULL"
+    elif generated_by == "user":
+        sql += " AND p.author_id IS NOT NULL"
+
+    # operators filter using board_spec->'operators'
+    if operators:
+        op_map = {"add": "+", "sub": "-", "mul": "*", "div": "/"}
+        all_ops_pg = ["+", "-", "*", "/"]
+
+        # operators selected in JSON symbol form
+        selected_pg_ops = [op_map[o] for o in operators if o in op_map]
+
+        if selected_pg_ops:
+            # disallow any operator that is not selected
+            disallowed = [op for op in all_ops_pg if op not in selected_pg_ops]
+            if disallowed:
+                sql += " AND NOT ((p.board_spec->'operators') ?| :disallowed_ops)"
+                params["disallowed_ops"] = disallowed
+
+            # require that all selected operators are present
+            sql += " AND (p.board_spec->'operators') ?& :required_ops"
+            params["required_ops"] = selected_pg_ops
+
+    # cursor-based pagination
     if cursor_id:
         sql += " AND p.id < :cursor_id"
         params["cursor_id"] = cursor_id
 
-    sql += " ORDER BY p.id DESC LIMIT :limit"
+    sql += """
+        GROUP BY
+            p.id,
+            p.title,
+            p.size,
+            p.difficulty,
+            p.created_at,
+            u.id,
+            u.name,
+            u.avatar_key,
+            p.board_spec->'operators'
+    """
+
+    # minimum likes filter
+    if min_likes is not None:
+        sql += " HAVING COUNT(DISTINCT pl.id) >= :min_likes"
+        params["min_likes"] = min_likes
+
+    # sort clause
+    if sort == "likes_desc":
+        order_clause = "ORDER BY likes_count DESC, p.id DESC"
+    elif sort == "difficulty_desc":
+        order_clause = "ORDER BY p.difficulty DESC NULLS LAST, p.id DESC"
+    elif sort == "difficulty_asc":
+        order_clause = "ORDER BY p.difficulty ASC NULLS LAST, p.id DESC"
+    elif sort == "size_desc":
+        order_clause = "ORDER BY p.size DESC, p.id DESC"
+    else:
+        order_clause = "ORDER BY p.created_at DESC, p.id DESC"
+
+    sql += f"""
+        {order_clause}
+        LIMIT :limit
+    """
 
     with get_conn() as conn:
         rows = conn.execute(text(sql), params).mappings().all()

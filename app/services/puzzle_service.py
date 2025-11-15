@@ -12,6 +12,9 @@ from app.repositories import puzzles_repo
 from app.services import puzzle_generation
 from app.services.user_service import _build_avatar_url
 
+import json
+from typing import Any, Dict, List, Optional
+
 REVALIDATE_URL = os.getenv("REVALIDATE_URL")
 REVALIDATE_SECRET = os.getenv("REVALIDATE_SECRET")
 DAILY_TZ = os.getenv("DAILY_TZ", "UTC")  # p.ej. "America/Puerto_Rico"
@@ -54,6 +57,37 @@ def _map_daily_row(row: dict) -> dict:
             "author": author_block,
         },
     }
+
+
+def _normalize_operators(raw: Any) -> List[str]:
+    """
+    Normalizes board_spec operators into API-friendly tokens.
+
+    Input is expected to come from PostgreSQL as either:
+      - a Python list like ["+", "-", "*"]
+      - or a JSON string representing that list.
+
+    Output is a de-duplicated list of tokens:
+      ["add", "sub", "mul", "div"]
+    """
+    if raw is None:
+        return []
+
+    if isinstance(raw, list):
+        ops = raw
+    else:
+        try:
+            ops = json.loads(raw)
+        except Exception:
+            return []
+
+    symbol_to_token = {"+": "add", "-": "sub", "*": "mul", "/": "div"}
+    result: List[str] = []
+    for sym in ops:
+        token = symbol_to_token.get(sym)
+        if token and token not in result:
+            result.append(token)
+    return result
 
 
 def ensure_daily_puzzle_for_today(auto_generate_fallback: bool = True) -> dict:
@@ -253,14 +287,50 @@ def delete_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
 
 
 def browse_puzzles_public(
-    *, limit: int, cursor: Optional[str], size: Optional[int], q: Optional[str], sort: str
+    *,
+    limit: int,
+    cursor: Optional[str],
+    size: Optional[int],
+    q: Optional[str],
+    sort: str,
+    min_likes: Optional[int],
+    author_id: Optional[int],
+    generated_by: Optional[str],
+    operators: Optional[str],
 ) -> Dict[str, Any]:
 
-    if sort and sort != "created_at_desc":
-        raise ValueError("Unsupported sort; only 'created_at_desc' is available")
+    # --- validar sort ---
+    allowed_sorts = {
+        "created_at_desc",
+        "likes_desc",
+        "difficulty_desc",
+        "difficulty_asc",
+        "size_desc",
+    }
+    if sort not in allowed_sorts:
+        raise ValueError("Unsupported sort; allowed: " + ", ".join(sorted(allowed_sorts)))
 
     cursor_id = int(cursor) if cursor else None
-    rows = puzzles_repo.browse_puzzles_public(limit=limit, cursor_id=cursor_id, size=size, q=q)
+
+    # --- normalizar operators (string "add,sub" -> ["add","sub"]) ---
+    operators_list: Optional[List[str]] = None
+    if operators:
+        raw = [op.strip().lower() for op in operators.split(",") if op.strip()]
+        allowed_ops = {"add", "sub", "mul", "div"}
+        filtered = [op for op in raw if op in allowed_ops]
+        operators_list = filtered or None
+
+    rows = puzzles_repo.browse_puzzles_public(
+        limit=limit,
+        cursor_id=cursor_id,
+        size=size,
+        q=q,
+        sort=sort,
+        min_likes=min_likes,
+        author_id=author_id,
+        generated_by=generated_by,
+        operators=operators_list,
+    )
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -277,15 +347,25 @@ def browse_puzzles_public(
                 "avatar_url": _build_avatar_url(r.get("author_avatar_key")),
             }
 
-        items.append({
-            "id": r["id"],
-            "slug": _slugify(r["title"]),
-            "title": r["title"],
-            "size": r["size"],
-            "difficulty": r["difficulty"],
-            "created_at": r["created_at"].isoformat(),
-            "author": author_block,
-        })
+        generated_by = "user" if r.get("author_id") else "algorithm"
+
+        operators = _normalize_operators(r.get("operators_raw"))
+
+        items.append(
+            {
+                "id": r["id"],
+                "slug": _slugify(r["title"]),
+                "title": r["title"],
+                "size": r["size"],
+                "difficulty": r["difficulty"],
+                "created_at": r["created_at"].isoformat(),
+                "author": author_block,
+                "likes_count": r.get("likes_count", 0),
+                "solves_count": r.get("solves_count", 0),
+                "generated_by": generated_by,
+                "operators": operators,
+            }
+        )
 
     next_cursor = str(rows[-1]["id"]) if has_more and rows else None
     return {"items": items, "next_cursor": next_cursor}
