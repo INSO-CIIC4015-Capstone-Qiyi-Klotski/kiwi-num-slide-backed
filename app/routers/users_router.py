@@ -1,12 +1,13 @@
 from typing import Optional
 
 from fastapi import APIRouter, Query, Path, HTTPException, Depends
-from fastapi.openapi.models import Response
+# from fastapi.openapi.models import Response
+from fastapi import APIRouter, Query, Path, HTTPException, Depends, Response
 from starlette import status
 
 from app.core.security import get_current_token
 from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck, \
-    FollowingPage, MyLikedPuzzlesPage, MySolvesPage
+    FollowingPage, MyLikedPuzzlesPage, MySolvesPage, UserListPage
 from app.services import user_service
 
 from app.core.security import get_current_token_cookie_or_header
@@ -121,3 +122,42 @@ def get_all_my_solves(
 ):
     current_user_id = int(token["sub"])
     return user_service.list_all_my_solves(current_user_id, limit, cursor)
+
+
+@router.get("", response_model=UserListPage)
+def browse_users(
+    response: Response,
+    q: Optional[str] = Query(None, min_length=1, max_length=100),
+    sort: str = Query("created_at_desc"),
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+    followers_of: Optional[int] = Query(
+        None,
+        ge=1,
+        alias="followersOf",
+        description="Users who follow this user id",
+    ),
+    following_of: Optional[int] = Query(
+        None,
+        ge=1,
+        alias="followingOf",
+        description="Users this user id is following",
+    ),
+):
+    try:
+        data = user_service.browse_users_public(
+            limit=limit,
+            cursor=cursor,
+            q=q,
+            sort=sort,
+            followers_of=followers_of,
+            following_of=following_of,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Cache amigable para SSR/CSR
+    response.headers[
+        "Cache-Control"
+    ] = "public, s-maxage=120, stale-while-revalidate=60"
+    return data

@@ -311,3 +311,102 @@ def list_my_solves(
         rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
+
+
+def browse_users_public(
+    *,
+    limit: int,
+    cursor_id: Optional[int],
+    q: Optional[str],
+    sort: str,
+    followers_of: Optional[int],
+    following_of: Optional[int],
+) -> List[Dict[str, Any]]:
+    """
+    Public user listing with filters and id-based cursor pagination (descending).
+    Returns up to limit+1 rows to detect "has_more".
+    """
+
+    sql = """
+        SELECT
+            u.id,
+            u.name,
+            u.avatar_key,
+            u.created_at,
+            COALESCE(p.created_count, 0)    AS created_count,
+            COALESCE(s.solved_count, 0)     AS solved_count,
+            COALESCE(f.followers_count, 0)  AS followers_count
+        FROM users u
+        LEFT JOIN (
+            SELECT author_id AS user_id, COUNT(*) AS created_count
+            FROM puzzles
+            GROUP BY author_id
+        ) p ON p.user_id = u.id
+        LEFT JOIN (
+            SELECT user_id, COUNT(*) AS solved_count
+            FROM puzzle_solves
+            GROUP BY user_id
+        ) s ON s.user_id = u.id
+        LEFT JOIN (
+            SELECT followee_id AS user_id, COUNT(*) AS followers_count
+            FROM follows
+            GROUP BY followee_id
+        ) f ON f.user_id = u.id
+        WHERE 1=1
+    """
+    params: Dict[str, Any] = {"limit": limit + 1}
+
+    # búsqueda por nombre
+    if q:
+        sql += " AND u.name ILIKE :q_like"
+        params["q_like"] = f"%{q}%"
+
+    # filtro: usuarios que SIGUEN a followers_of
+    if followers_of is not None:
+        sql += """
+            AND EXISTS (
+                SELECT 1
+                FROM follows fu
+                WHERE fu.follower_id = u.id
+                  AND fu.followee_id = :followers_of
+            )
+        """
+        params["followers_of"] = followers_of
+
+    # filtro: usuarios que son seguidos por following_of
+    if following_of is not None:
+        sql += """
+            AND EXISTS (
+                SELECT 1
+                FROM follows fu
+                WHERE fu.follower_id = :following_of
+                  AND fu.followee_id = u.id
+            )
+        """
+        params["following_of"] = following_of
+
+    # cursor por id
+    if cursor_id:
+        sql += " AND u.id < :cursor_id"
+        params["cursor_id"] = cursor_id
+
+    # sort
+    if sort == "followers_desc":
+        order_clause = "ORDER BY followers_count DESC, u.id DESC"
+    elif sort == "created_desc":
+        order_clause = "ORDER BY created_count DESC, u.id DESC"
+    elif sort == "solved_desc":
+        order_clause = "ORDER BY solved_count DESC, u.id DESC"
+    else:
+        # created_at_desc
+        order_clause = "ORDER BY u.created_at DESC, u.id DESC"
+
+    sql += f"""
+        {order_clause}
+        LIMIT :limit
+    """
+
+    with get_conn() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
+
+    return [dict(r) for r in rows]

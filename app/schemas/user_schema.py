@@ -93,3 +93,24 @@ class MySolveRow(BaseModel):
 class MySolvesPage(BaseModel):
     items: List[MySolveRow]
     next_cursor: Optional[str] = None           # último solve_id de la página
+
+
+
+class BrowseUserCounts(BaseModel):
+    created: int
+    solved: int
+    followers: int
+
+
+class UserListItem(BaseModel):
+    id: int
+    slug: str
+    display_name: str
+    avatar_url: Optional[str] = None
+    created_at: str
+    counts: BrowseUserCounts
+
+
+class UserListPage(BaseModel):
+    items: List[UserListItem]
+    next_cursor: Optional[str] = None

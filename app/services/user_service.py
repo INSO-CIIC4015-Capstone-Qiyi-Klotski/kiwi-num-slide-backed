@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 import unicodedata
 import requests
@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from starlette import status
 
 from app.repositories import users_repo
+
 
 AVATAR_CDN_BASE = os.getenv("AVATAR_CDN_BASE", "").rstrip("/")
 REVALIDATE_SECRET = os.getenv("REVALIDATE_SECRET")
@@ -252,4 +253,65 @@ def list_all_my_solves(current_user_id: int, limit: int, cursor: Optional[str]) 
         })
 
     next_cursor = str(rows[-1]["solve_id"]) if has_more and rows else None
+    return {"items": items, "next_cursor": next_cursor}
+
+
+def browse_users_public(
+    *,
+    limit: int,
+    cursor: Optional[str],
+    q: Optional[str],
+    sort: str,
+    followers_of: Optional[int],
+    following_of: Optional[int],
+) -> Dict[str, Any]:
+    # --- validar sort ---
+    allowed_sorts = {
+        "created_at_desc",   # más recientes
+        "followers_desc",    # más followers
+        "created_desc",      # más puzzles creados
+        "solved_desc",       # más puzzles resueltos
+    }
+    if sort not in allowed_sorts:
+        raise ValueError(
+            "Unsupported sort; allowed: " + ", ".join(sorted(allowed_sorts))
+        )
+
+    # No permitimos usar ambos filtros a la vez
+    if followers_of is not None and following_of is not None:
+        raise ValueError("Use only one of followersOf or followingOf")
+
+    cursor_id = int(cursor) if cursor else None
+
+    rows = users_repo.browse_users_public(
+        limit=limit,
+        cursor_id=cursor_id,
+        q=q,
+        sort=sort,
+        followers_of=followers_of,
+        following_of=following_of,
+    )
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    items: List[Dict[str, Any]] = []
+    for r in rows:
+        slug = _slugify(r["name"])
+        items.append(
+            {
+                "id": r["id"],
+                "slug": slug,
+                "display_name": r["name"],
+                "avatar_url": _build_avatar_url(r.get("avatar_key")),
+                "created_at": r["created_at"].isoformat(),
+                "counts": {
+                    "created": r.get("created_count", 0),
+                    "solved": r.get("solved_count", 0),
+                    "followers": r.get("followers_count", 0),
+                },
+            }
+        )
+
+    next_cursor = str(rows[-1]["id"]) if has_more and rows else None
     return {"items": items, "next_cursor": next_cursor}
