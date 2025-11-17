@@ -144,7 +144,7 @@ def gen_users(rng: random.Random, count: int):
         name = f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
         base = slugify(name)
         email = f"{base}{i}@example.com"
-        pwd_hash = "hash$" + "".join(rng.choice(string.hexdigits.lower()) for _ in range(32))
+        pwd_hash = "$2b$12$sMquzFY7EemeV3HqfUYw7eknl4x8tuhv7US.nl8Zzi/SwIhfhdQBW" # hashed pass for "123456789"
         is_verified = rng.random() < 0.85
 
         # Siempre un avatar válido
