@@ -54,14 +54,14 @@ def clear_auth_cookies(response: Response, *, prod: bool):
     secure, samesite = _cookie_params(prod)
 
     # access_token (path '/')
-    response.delete_cookie("access_token", path="/", samesite=samesite)
+    response.delete_cookie("access_token", path="/", samesite=samesite, secure=secure)
 
     # refresh_token: bórralo en ambos paths por si cambió en alguna versión
-    response.delete_cookie("refresh_token", path="/auth", samesite=samesite)
-    response.delete_cookie("refresh_token", path="/", samesite=samesite)
+    response.delete_cookie("refresh_token", path="/auth", samesite=samesite, secure=secure)
+    response.delete_cookie("refresh_token", path="/", samesite=samesite, secure=secure)
 
     # csrf
-    response.delete_cookie("csrf_token", path="/", samesite=samesite)
+    response.delete_cookie("csrf_token", path="/", samesite=samesite, secure=secure)
 
 
 def require_csrf(
