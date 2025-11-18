@@ -1,24 +1,40 @@
+import os
 from datetime import timedelta
 from fastapi import Response, Cookie, Header, HTTPException
 
 ACCESS_COOKIE = "access_token"
 REFRESH_COOKIE = "refresh_token"
 CSRF_COOKIE = "csrf_token"
+USE_CROSS_SITE_COOKIES = os.getenv("CROSS_SITE_COOKIES", "0")
 
+def _cookie_params(prod: bool):
+    """
+    Devuelve (secure, samesite) según el entorno:
+
+    - Si USE_CROSS_SITE_COOKIES=1  -> SameSite=None + Secure=True (para túneles / dominios distintos)
+    - Si no                        -> SameSite=Lax + Secure=prod (para mismo dominio en prod)
+    """
+    if USE_CROSS_SITE_COOKIES:
+        return True, "None"
+    else:
+        # En un deploy "normal" mismo dominio, Lax es suficiente
+        return prod, "Lax"
 
 def set_auth_cookies(response: Response, access: str, refresh: str | None, *, prod: bool):
+    secure, samesite = _cookie_params(prod)
+
     response.set_cookie(
         key=ACCESS_COOKIE, value=access,
-        httponly=True, secure=prod,
-        samesite="None" if prod else "Lax",
+        httponly=True, secure=secure,
+        samesite=samesite,
         max_age=int(timedelta(minutes=15).total_seconds()),
         path="/"
     )
     if refresh:
         response.set_cookie(
             key=REFRESH_COOKIE, value=refresh,
-            httponly=True, secure=prod,
-            samesite="None" if prod else "Lax",
+            httponly=True, secure=secure,
+            samesite=samesite,
             max_age=int(timedelta(days=30).total_seconds()),
             path="/auth"
         )
@@ -35,7 +51,7 @@ def set_csrf_cookie(response: Response, token: str, *, prod: bool):
 
 
 def clear_auth_cookies(response: Response, *, prod: bool):
-    samesite = "None" if prod else "Lax"
+    secure, samesite = _cookie_params(prod)
 
     # access_token (path '/')
     response.delete_cookie("access_token", path="/", samesite=samesite)
