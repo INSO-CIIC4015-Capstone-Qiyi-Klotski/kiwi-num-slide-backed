@@ -114,3 +114,14 @@ class UserListItem(BaseModel):
 class UserListPage(BaseModel):
     items: List[UserListItem]
     next_cursor: Optional[str] = None
+
+class AvatarItem(BaseModel):
+  key: str
+  url: str
+
+class AvatarCatalogResponse(BaseModel):
+  items: List[AvatarItem]
+
+
+class UpdateAvatarBody(BaseModel):
+    avatar_key: str = Field(..., min_length=3, max_length=200)
