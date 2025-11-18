@@ -16,6 +16,7 @@ class PublicUserStats(BaseModel):
     puzzles: int
     likes_received: int
     followers: int
+    following: int
 
 
 class PublicUser(BaseModel):

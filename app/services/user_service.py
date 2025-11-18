@@ -52,6 +52,7 @@ def get_public_profile(user_id: int) -> dict | None:
             "puzzles": row["puzzles_count"],
             "likes_received": row["likes_received"],
             "followers": row["followers_count"],
+            "following": row["following_count"],
         },
     }
 
