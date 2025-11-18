@@ -37,10 +37,22 @@ def send_verification_email(email: str) -> dict:
 
     subject = "Verify your KiwiNumSlide account"
     html = f"""
-        <h3>Verify your KiwiNumSlide account</h3>
-        <p>Click to verify your email:</p>
-        <p><a href="{verify_url}">{verify_url}</a></p>
-        <p>If you didn’t request this, you can ignore this message.</p>
+      <h3>Verify your KiwiNumSlide account</h3>
+      <p>Click the button below:</p>
+
+      <table role="presentation" cellspacing="0" cellpadding="0">
+        <tr>
+          <td style="border-radius:8px;" bgcolor="#4f46e5">
+            <a href="{verify_url}"
+               style="padding: 12px 20px; display:inline-block; color:white; 
+                      text-decoration:none; font-weight:bold; border-radius:8px;">
+              Verify Email
+            </a>
+          </td>
+        </tr>
+      </table>
+
+      <p>If you didn’t request this, you can ignore this message.</p>
     """
 
     msg_id = send_simple_email(to_email=email, subject=subject, html_body=html)
