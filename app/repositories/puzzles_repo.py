@@ -4,6 +4,7 @@ from sqlalchemy import text, bindparam
 from sqlalchemy.dialects.postgresql import JSONB
 
 from ..db import get_tx, get_conn
+ALGORITHM_AUTHOR_ID = 1  # puzzles generados por el algoritmo (usuario Kiwi)
 
 
 def insert_puzzle(
@@ -198,9 +199,11 @@ def browse_puzzles_public(
 
     # generatedBy filter: algorithm vs user
     if generated_by == "algorithm":
-        sql += " AND p.author_id IS NULL"
+        sql += " AND p.author_id = :algo_author_id"
+        params["algo_author_id"] = ALGORITHM_AUTHOR_ID
     elif generated_by == "user":
-        sql += " AND p.author_id IS NOT NULL"
+        sql += " AND (p.author_id IS NULL OR p.author_id <> :algo_author_id)"
+        params["algo_author_id"] = ALGORITHM_AUTHOR_ID
 
     # operators filter using board_spec->'operators'
     if operators:

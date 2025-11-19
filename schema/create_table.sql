@@ -105,5 +105,29 @@ CREATE TABLE daily_puzzles (
 
 CREATE INDEX ix_daily_puzzles_puzzle ON daily_puzzles (puzzle_id);
 
+
+-- =========================================================
+-- Seed: system user "Kiwi" for algorithm-generated puzzles
+-- =========================================================
+
+INSERT INTO users (id, name, email, password_hash, is_verified, avatar_key)
+VALUES (
+    1,
+    'Kiwi',
+    'kiwi+system@example.com', -- placeholder
+    '$2b$12$sMquzFY7EemeV3HqfUYw7eknl4x8tuhv7US.nl8Zzi/SwIhfhdQBW', -- placeholder hash
+    TRUE,
+    'avatars/kiwi.png'
+);
+
+-- Asegurar que la secuencia de users quede alineada con el MAX(id)
+-- (para que no intente reutilizar el 1 en futuros inserts sin id)
+SELECT setval(
+    pg_get_serial_sequence('users', 'id'),
+    (SELECT COALESCE(MAX(id), 1) FROM users),
+    TRUE
+);
+
+
 COMMIT;
 

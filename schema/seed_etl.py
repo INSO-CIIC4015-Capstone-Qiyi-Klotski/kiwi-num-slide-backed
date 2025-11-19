@@ -138,53 +138,87 @@ def slugify(s: str) -> str:
 
 
 def gen_users(rng: random.Random, count: int):
-    """Generate a list of synthetic users with unique emails."""
+    """Generate a list of synthetic users with unique emails.
+
+    The very first user is the system user 'Kiwi' (id=1 after TRUNCATE RESTART IDENTITY).
+    The rest are random synthetic users.
+    """
     users = []
-    for i in range(count):
+
+    if count <= 0:
+        return users
+
+    # 1) System user: Kiwi (will get id=1 after truncate + restart identity)
+    system_pwd_hash = "$2b$12$sMquzFY7EemeV3HqfUYw7eknl4x8tuhv7US.nl8Zzi/SwIhfhdQBW"
+    users.append((
+        "Kiwi",                              # name
+        "kiwi+system@example.com",           # email placeholder
+        system_pwd_hash,                     # password_hash placeholder
+        True,                                # is_verified
+        "avatars/kiwi.png",                  # avatar_key
+    ))
+
+    # 2) Rest of synthetic users
+    for i in range(count - 1):
         name = f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
         base = slugify(name)
         email = f"{base}{i}@example.com"
-        pwd_hash = "$2b$12$sMquzFY7EemeV3HqfUYw7eknl4x8tuhv7US.nl8Zzi/SwIhfhdQBW" # hashed pass for "123456789"
+        pwd_hash = system_pwd_hash  # reuse same hashed pass for simplicity
         is_verified = rng.random() < 0.85
 
-        # Siempre un avatar válido
         animal = rng.choice(ANIMAL_AVATARS)
         avatar_key = f"avatars/{animal}.png"
 
         users.append((name, email, pwd_hash, is_verified, avatar_key))
+
     return users
 
 
-def gen_puzzles(rng: random.Random, count: int, user_ids):
-    """Generate puzzles with random size, board specs, and optional authors."""
+def gen_puzzles(rng: random.Random, count: int, user_ids, system_author_id: int | None = None):
+    """Generate puzzles with random size, board specs, and authors.
+
+    - Most puzzles are assigned to random human users.
+    - A subset are considered 'algorithm-generated' and use the system author (Kiwi).
+    """
     puzzles = []
+
+    # Si no nos pasan el system_author_id, asumimos que es el primer usuario
+    if system_author_id is None and user_ids:
+        system_author_id = user_ids[0]
+
     for _ in range(count):
-        # author_id puede ser NULL (puzzles generados por el algoritmo)
-        author_id = rng.choice(user_ids) if rng.random() < 0.9 else None
         title = f"Puzzle #{rng.randint(1000, 9999)}"
         N = rng.choice([3, 4, 5])
 
-        # Elegir qué operadores se permiten según si tiene autor o no
-        if author_id is None:
-            # Puzzles "del algoritmo": solo suma/resta o solo multiplicación/división
+        # Decide si este puzzle es "algoritmo" o "usuario"
+        # (antes usabas author_id = None para algoritmo;
+        #  ahora usamos siempre system_author_id en su lugar).
+        is_algorithm = rng.random() < 0.1  # ~10% algoritmo, 90% usuario (ajusta si quieres)
+
+        if is_algorithm and system_author_id is not None:
+            # Puzzles "del algoritmo" → autor fijo Kiwi
+            author_id = system_author_id
+
+            # Operadores más restringidos, igual que antes
             choice = rng.random()
             if choice < 0.3:
                 allowed_ops = ["+"]
-            elif choice < .6:
+            elif choice < 0.6:
                 allowed_ops = ["+", "-"]
             else:
                 allowed_ops = ["*", "/"]
         else:
-            # Puzzles con autor: usan el set completo
+            # Puzzles con autor "humano" → cualquier user_id
+            author_id = rng.choice(user_ids)
             allowed_ops = OPS
 
         board_spec = gen_board_spec(N, rng, allowed_ops)
 
-        # Sin NULLs en dificultad ni num_solutions
         diff = rng.randint(1, 5)          # dificultad 1–5 siempre
         num_solutions = rng.randint(1, 6) # al menos 1 solución
 
         puzzles.append((author_id, title, N, board_spec, num_solutions, diff))
+
     return puzzles
 
 
@@ -482,8 +516,16 @@ def main():
         user_rows = gen_users(rng, args.users)
         user_ids = insert_users(conn, user_rows)
 
+        # El primer user insertado es Kiwi → system_author_id
+        system_author_id = user_ids[0] if user_ids else None
+
         # 2) Puzzles
-        puzzle_rows = gen_puzzles(rng, args.puzzles, user_ids)
+        puzzle_rows = gen_puzzles(
+            rng,
+            args.puzzles,
+            user_ids,
+            system_author_id=system_author_id,
+        )
         puzzle_ids, specs = insert_puzzles(conn, puzzle_rows)
 
         # 3) Follows (ensure in/out-degree >= 1)

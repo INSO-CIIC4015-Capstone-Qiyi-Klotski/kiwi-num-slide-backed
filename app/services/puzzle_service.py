@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 REVALIDATE_URL = os.getenv("REVALIDATE_URL")
 REVALIDATE_SECRET = os.getenv("REVALIDATE_SECRET")
 DAILY_TZ = os.getenv("DAILY_TZ", "UTC")  # p.ej. "America/Puerto_Rico"
+ALGORITHM_AUTHOR_ID = 1
 
 def _slugify(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
@@ -338,18 +339,25 @@ def browse_puzzles_public(
     items: List[Dict[str, Any]] = []
     for r in rows:
         author_block = None
-        if r.get("author_id"):
+        author_id_val = r.get("author_id")
+
+        # author_block solo si NO es el usuario del algoritmo
+        if author_id_val and author_id_val != ALGORITHM_AUTHOR_ID:
             display_name = r.get("author_name") or "Unknown"
             author_block = {
-                "id": r["author_id"],
+                "id": author_id_val,
                 "slug": _slugify(display_name),
                 "display_name": display_name,
                 "avatar_url": _build_avatar_url(r.get("author_avatar_key")),
             }
 
-        generated_by = "user" if r.get("author_id") else "algorithm"
+        # generated_by: "algorithm" si es Kiwi (id=1) o sin autor; "user" en el resto
+        if author_id_val is None or author_id_val == ALGORITHM_AUTHOR_ID:
+            generated_by_value = "algorithm"
+        else:
+            generated_by_value = "user"
 
-        operators = _normalize_operators(r.get("operators_raw"))
+        operators_norm = _normalize_operators(r.get("operators_raw"))
 
         items.append(
             {
@@ -362,8 +370,8 @@ def browse_puzzles_public(
                 "author": author_block,
                 "likes_count": r.get("likes_count", 0),
                 "solves_count": r.get("solves_count", 0),
-                "generated_by": generated_by,
-                "operators": operators,
+                "generated_by": generated_by_value,
+                "operators": operators_norm,
             }
         )
 
