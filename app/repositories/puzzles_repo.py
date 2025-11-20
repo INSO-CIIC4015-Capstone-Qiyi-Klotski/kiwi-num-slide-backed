@@ -148,6 +148,7 @@ def browse_puzzles_public(
     *,
     limit: int,
     cursor_id: Optional[int],
+    cursor_primary: Optional[Any],   # 👈 nuevo
     size: Optional[int],
     q: Optional[str],
     sort: str,
@@ -157,8 +158,8 @@ def browse_puzzles_public(
     operators: Optional[List[str]],
 ) -> List[Dict[str, Any]]:
     """
-    Public puzzle listing with filters and id-based cursor pagination (descending).
-    Returns up to limit+1 rows to detect "has_more".
+    Public puzzle listing with filters and cursor pagination (descending/ascending
+    depending on sort). Returns up to limit+1 rows to detect "has_more".
     """
 
     sql = """
@@ -210,24 +211,65 @@ def browse_puzzles_public(
         op_map = {"add": "+", "sub": "-", "mul": "*", "div": "/"}
         all_ops_pg = ["+", "-", "*", "/"]
 
-        # operators selected in JSON symbol form
         selected_pg_ops = [op_map[o] for o in operators if o in op_map]
 
         if selected_pg_ops:
-            # disallow any operator that is not selected
             disallowed = [op for op in all_ops_pg if op not in selected_pg_ops]
             if disallowed:
                 sql += " AND NOT ((p.board_spec->'operators') ?| :disallowed_ops)"
                 params["disallowed_ops"] = disallowed
 
-            # require that all selected operators are present
             sql += " AND (p.board_spec->'operators') ?& :required_ops"
             params["required_ops"] = selected_pg_ops
 
-    # cursor-based pagination
-    if cursor_id:
-        sql += " AND p.id < :cursor_id"
-        params["cursor_id"] = cursor_id
+    # 🔹 cursor-based pagination (según sort)
+    if cursor_primary is not None and cursor_id is not None:
+        if sort == "created_at_desc":
+            sql += """
+                AND (
+                    p.created_at < :cursor_created_at
+                    OR (p.created_at = :cursor_created_at AND p.id < :cursor_id)
+                )
+            """
+            params["cursor_created_at"] = cursor_primary
+            params["cursor_id"] = cursor_id
+
+        elif sort == "difficulty_desc":
+            sql += """
+                AND (
+                    p.difficulty < :cursor_diff
+                    OR (p.difficulty = :cursor_diff AND p.id < :cursor_id)
+                )
+            """
+            params["cursor_diff"] = cursor_primary
+            params["cursor_id"] = cursor_id
+
+        elif sort == "difficulty_asc":
+            sql += """
+                AND (
+                    p.difficulty > :cursor_diff
+                    OR (p.difficulty = :cursor_diff AND p.id < :cursor_id)
+                )
+            """
+            params["cursor_diff"] = cursor_primary
+            params["cursor_id"] = cursor_id
+
+        elif sort == "size_desc":
+            sql += """
+                AND (
+                    p.size < :cursor_size
+                    OR (p.size = :cursor_size AND p.id < :cursor_id)
+                )
+            """
+            params["cursor_size"] = cursor_primary
+            params["cursor_id"] = cursor_id
+
+        # likes_desc se maneja luego en HAVING
+    else:
+        # fallback legacy: solo por id si lo tenemos
+        if cursor_id is not None:
+            sql += " AND p.id < :cursor_id"
+            params["cursor_id"] = cursor_id
 
     sql += """
         GROUP BY
@@ -242,10 +284,27 @@ def browse_puzzles_public(
             p.board_spec->'operators'
     """
 
-    # minimum likes filter
+    # 🔹 HAVING (min_likes + cursor para likes_desc)
+    having_clauses = []
+
     if min_likes is not None:
-        sql += " HAVING COUNT(DISTINCT pl.id) >= :min_likes"
+        having_clauses.append("COUNT(DISTINCT pl.id) >= :min_likes")
         params["min_likes"] = min_likes
+
+    if sort == "likes_desc" and cursor_primary is not None and cursor_id is not None:
+        having_clauses.append(
+            """
+            (
+                COUNT(DISTINCT pl.id) < :cursor_likes
+                OR (COUNT(DISTINCT pl.id) = :cursor_likes AND p.id < :cursor_id)
+            )
+            """
+        )
+        params["cursor_likes"] = cursor_primary
+        params["cursor_id"] = cursor_id
+
+    if having_clauses:
+        sql += " HAVING " + " AND ".join(having_clauses)
 
     # sort clause
     if sort == "likes_desc":

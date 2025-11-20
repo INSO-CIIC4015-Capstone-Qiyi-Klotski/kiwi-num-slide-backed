@@ -6,7 +6,7 @@ import unicodedata
 import requests
 from fastapi import HTTPException
 from starlette import status
-
+from datetime import datetime
 from app.repositories import users_repo
 
 
@@ -282,11 +282,30 @@ def browse_users_public(
     if followers_of is not None and following_of is not None:
         raise ValueError("Use only one of followersOf or followingOf")
 
-    cursor_id = int(cursor) if cursor else None
+    # --- cursor compuesto: "<primary>,<id>" ---
+    cursor_primary: Optional[Any] = None
+    cursor_id: Optional[int] = None
+
+    if cursor:
+        parts = cursor.split(",", 1)
+        if len(parts) == 2:
+            head, tail = parts
+            cursor_id = int(tail)
+
+            if sort == "created_at_desc":
+                # created_at en ISO8601
+                cursor_primary = datetime.fromisoformat(head)
+            else:
+                # followers/created/solved son enteros
+                cursor_primary = int(head)
+        else:
+            # soporte legacy: solo id
+            cursor_id = int(cursor)
 
     rows = users_repo.browse_users_public(
         limit=limit,
         cursor_id=cursor_id,
+        cursor_primary=cursor_primary,
         q=q,
         sort=sort,
         followers_of=followers_of,
@@ -314,5 +333,20 @@ def browse_users_public(
             }
         )
 
-    next_cursor = str(rows[-1]["id"]) if has_more and rows else None
+    # --- next_cursor compuesto ---
+    if has_more and rows:
+        last = rows[-1]
+        if sort == "followers_desc":
+            primary = last["followers_count"]
+        elif sort == "created_desc":
+            primary = last["created_count"]
+        elif sort == "solved_desc":
+            primary = last["solved_count"]
+        else:  # created_at_desc
+            primary = last["created_at"].isoformat()
+
+        next_cursor = f"{primary},{last['id']}"
+    else:
+        next_cursor = None
+
     return {"items": items, "next_cursor": next_cursor}

@@ -323,6 +323,7 @@ def browse_users_public(
     *,
     limit: int,
     cursor_id: Optional[int],
+    cursor_primary: Optional[Any],
     q: Optional[str],
     sort: str,
     followers_of: Optional[int],
@@ -392,7 +393,54 @@ def browse_users_public(
         params["following_of"] = following_of
 
     # cursor por id
-    if cursor_id:
+    # cursor compuesto según el sort actual
+    if cursor_primary is not None and cursor_id is not None:
+        if sort == "followers_desc":
+            sql += """
+                AND (
+                    COALESCE(f.followers_count, 0) < :cursor_primary
+                    OR (
+                        COALESCE(f.followers_count, 0) = :cursor_primary
+                        AND u.id < :cursor_id
+                    )
+                )
+            """
+        elif sort == "created_desc":
+            sql += """
+                AND (
+                    COALESCE(p.created_count, 0) < :cursor_primary
+                    OR (
+                        COALESCE(p.created_count, 0) = :cursor_primary
+                        AND u.id < :cursor_id
+                    )
+                )
+            """
+        elif sort == "solved_desc":
+            sql += """
+                AND (
+                    COALESCE(s.solved_count, 0) < :cursor_primary
+                    OR (
+                        COALESCE(s.solved_count, 0) = :cursor_primary
+                        AND u.id < :cursor_id
+                    )
+                )
+            """
+        else:  # created_at_desc
+            sql += """
+                AND (
+                    u.created_at < :cursor_primary
+                    OR (
+                        u.created_at = :cursor_primary
+                        AND u.id < :cursor_id
+                    )
+                )
+            """
+
+        params["cursor_primary"] = cursor_primary
+        params["cursor_id"] = cursor_id
+
+    # fallback legacy: solo por id si vino un cursor viejo "123"
+    elif cursor_id is not None:
         sql += " AND u.id < :cursor_id"
         params["cursor_id"] = cursor_id
 

@@ -311,7 +311,29 @@ def browse_puzzles_public(
     if sort not in allowed_sorts:
         raise ValueError("Unsupported sort; allowed: " + ", ".join(sorted(allowed_sorts)))
 
-    cursor_id = int(cursor) if cursor else None
+    # 🔹 Cursor: valor principal + id, según el sort
+    cursor_id: Optional[int] = None
+    cursor_primary: Optional[Any] = None  # int o datetime
+
+    if cursor:
+        parts = cursor.split(",", 1)
+        if len(parts) == 2:
+            head, tail = parts
+            cursor_id = int(tail)
+
+            if sort == "created_at_desc":
+                try:
+                    cursor_primary = datetime.fromisoformat(head)
+                except ValueError:
+                    raise ValueError("Invalid cursor for created_at_desc; expected '<iso>,<id>'")
+            else:
+                try:
+                    cursor_primary = int(head)
+                except ValueError:
+                    raise ValueError("Invalid cursor; expected '<int>,<id>'")
+        else:
+            # Compatibilidad simple: si llega solo "id", usamos solo id.
+            cursor_id = int(cursor)
 
     # --- normalizar operators (string "add,sub" -> ["add","sub"]) ---
     operators_list: Optional[List[str]] = None
@@ -324,6 +346,7 @@ def browse_puzzles_public(
     rows = puzzles_repo.browse_puzzles_public(
         limit=limit,
         cursor_id=cursor_id,
+        cursor_primary=cursor_primary,  # 👈 nuevo
         size=size,
         q=q,
         sort=sort,
@@ -375,7 +398,24 @@ def browse_puzzles_public(
             }
         )
 
-    next_cursor = str(rows[-1]["id"]) if has_more and rows else None
+    # 🔹 next_cursor consistente con el sort
+    if has_more and rows:
+        last = rows[-1]
+        if sort == "likes_desc":
+            primary = last["likes_count"]
+            next_cursor = f"{primary},{last['id']}"
+        elif sort in ("difficulty_desc", "difficulty_asc"):
+            primary = last["difficulty"] if last["difficulty"] is not None else 0
+            next_cursor = f"{primary},{last['id']}"
+        elif sort == "size_desc":
+            primary = last["size"]
+            next_cursor = f"{primary},{last['id']}"
+        else:  # created_at_desc
+            primary = last["created_at"].isoformat()
+            next_cursor = f"{primary},{last['id']}"
+    else:
+        next_cursor = None
+
     return {"items": items, "next_cursor": next_cursor}
 
 
