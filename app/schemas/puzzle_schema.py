@@ -28,7 +28,12 @@ class PuzzleOut(BaseModel):
     num_solutions: Optional[int] = None
     created_at: str
 
+    # Bloque de autor
     author: Optional[Dict[str, Any]] = None  # { id, slug, display_name, avatar_key, avatar_url }
+
+    # 🔹 NUEVO: stats básicos del puzzle
+    likes_count: int = 0
+    solves_count: int = 0
 
 
 class PuzzlesSSGSeedItem(BaseModel):

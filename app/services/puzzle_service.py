@@ -196,6 +196,9 @@ def get_puzzle_details(puzzle_id: int) -> dict | None:
         "num_solutions": row["num_solutions"],
         "created_at": row["created_at"].isoformat(),
         "author": author_block,
+        # 🔹 NUEVO
+        "likes_count": row.get("likes_count", 0),
+        "solves_count": row.get("solves_count", 0),
     }
 
 

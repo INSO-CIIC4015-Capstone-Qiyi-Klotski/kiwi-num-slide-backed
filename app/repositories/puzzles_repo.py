@@ -57,11 +57,29 @@ def get_puzzle_by_id(puzzle_id: int) -> dict | None:
             p.num_solutions,
             p.difficulty,
             p.created_at,
-            u.name  AS author_name,
-            u.avatar_key AS author_avatar_key
+            u.name        AS author_name,
+            u.avatar_key  AS author_avatar_key,
+            COUNT(DISTINCT pl.id) AS likes_count,
+            COUNT(DISTINCT ps.id) AS solves_count
         FROM puzzles p
-        LEFT JOIN users u ON u.id = p.author_id
+        LEFT JOIN users u
+            ON u.id = p.author_id
+        LEFT JOIN puzzle_likes pl
+            ON pl.puzzle_id = p.id
+        LEFT JOIN puzzle_solves ps
+            ON ps.puzzle_id = p.id
         WHERE p.id = :puzzle_id
+        GROUP BY
+            p.id,
+            p.author_id,
+            p.title,
+            p.size,
+            p.board_spec,
+            p.num_solutions,
+            p.difficulty,
+            p.created_at,
+            u.name,
+            u.avatar_key
     """)
     with get_conn() as conn:
         row = conn.execute(sql, {"puzzle_id": puzzle_id}).mappings().first()
