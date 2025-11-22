@@ -1,5 +1,5 @@
 import jwt
-from fastapi import APIRouter, HTTPException, Depends, Response, Request, Cookie
+from fastapi import APIRouter, HTTPException, Depends, Response, Request, Cookie, status
 from secrets import token_urlsafe
 
 from ..core import security
@@ -85,8 +85,13 @@ def refresh_token_route(
     new_access = security.create_access_token(user_id, email)
     # Si rotas refresh, créalo aquí y vuelve a setearlo
 
-    set_auth_cookies(response, new_access, None, prod=(request.url.scheme == "https"))
-    return {"access_token": new_access, "token_type": "bearer"}
+    new_refresh = security.create_refresh_token(
+        user_id=user_id,
+        email=email
+    )
+
+    set_auth_cookies(response, new_access, new_refresh, prod=(request.url.scheme == "https"))
+    return {"access_token": new_access, "token_type": "bearer", "refresh_token": new_refresh}
 
 
 @router.post("/logout")
@@ -112,18 +117,28 @@ def read_me(token_data: dict = Depends(security.get_current_token_cookie_or_head
 
 
 @router.get("/status", response_model=StatusOut)
-def auth_status(token_data: dict | None = Depends(get_current_token_optional_cookie_or_header)):
+def auth_status(
+    token_data: dict | None = Depends(get_current_token_optional_cookie_or_header),
+):
     """
-    Si hay access token válido (header o cookie) -> { verified, user }.
-    Si no -> { verified: False, user: None }.
+    Si hay access token válido -> 200 con { verified, user }.
+    Si NO hay access token válido -> 401 (para que el frontend active el refresh o logout).
     """
+
     if not token_data:
-        return {"verified": False, "user": None}
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
 
     user_id = int(token_data["sub"])
     user = users_repo.get_user_by_id(user_id)
+
     if not user:
-        return {"verified": False, "user": None}
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
 
     return {
         "verified": bool(user["is_verified"]),

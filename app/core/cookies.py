@@ -41,10 +41,11 @@ def set_auth_cookies(response: Response, access: str, refresh: str | None, *, pr
 
 
 def set_csrf_cookie(response: Response, token: str, *, prod: bool):
+    secure, samesite = _cookie_params(prod)
     response.set_cookie(
         key=CSRF_COOKIE, value=token,
-        httponly=False, secure=prod,
-        samesite="None" if prod else "Lax",
+        httponly=False, secure=secure,
+        samesite=samesite,
         max_age=int(timedelta(days=7).total_seconds()),
         path="/"
     )

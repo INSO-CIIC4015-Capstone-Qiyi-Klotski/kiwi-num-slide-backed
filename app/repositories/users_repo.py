@@ -102,9 +102,10 @@ def get_private_user_with_stats(user_id: int) -> dict | None:
             u.email,
             u.avatar_key,
             u.created_at,
-            COALESCE(p.puzzles_count, 0)   AS puzzles_count,
-            COALESCE(l.likes_received, 0)  AS likes_received,
-            COALESCE(f.followers_count, 0) AS followers_count
+            COALESCE(p.puzzles_count, 0)    AS puzzles_count,
+            COALESCE(l.likes_received, 0)   AS likes_received,
+            COALESCE(f.followers_count, 0)  AS followers_count,
+            COALESCE(g.following_count, 0)  AS following_count
         FROM users u
         LEFT JOIN (
             SELECT author_id AS user_id, COUNT(*) AS puzzles_count
@@ -122,6 +123,11 @@ def get_private_user_with_stats(user_id: int) -> dict | None:
             FROM follows
             GROUP BY followee_id
         ) f ON f.user_id = u.id
+        LEFT JOIN (
+            SELECT follower_id AS user_id, COUNT(*) AS following_count
+            FROM follows
+            GROUP BY follower_id
+        ) g ON g.user_id = u.id
         WHERE u.id = :id
     """)
     with get_conn() as conn:
