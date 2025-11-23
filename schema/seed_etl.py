@@ -17,6 +17,15 @@ The script expects a `.env.local` file at the project root with at least:
   DB_PORT=5432
   DB_NAME=kiwi_num_slide_dev
 
+By default it lee estas variables de entorno, pero puedes
+sobrescribirlas desde la CLI con:
+
+  --db-host
+  --db-port
+  --db-user
+  --db-password
+  --db-name
+
 Basic usage
 -----------
 1) First-time setup on an empty local DB (recommended):
@@ -108,7 +117,6 @@ def gen_board_spec(N: int, rng: random.Random, ops) -> dict:
     return {"N": N, "numbers": numbers, "expected": expected, "operators": operators}
 
 
-
 def gen_solution_from_board(board_spec: dict) -> dict:
     """Generate a simple 'solution' payload based on the board specification."""
     # For now, we treat the solution as the final ordered list of numbers.
@@ -193,7 +201,7 @@ def gen_puzzles(rng: random.Random, count: int, user_ids, system_author_id: int 
         # Decide si este puzzle es "algoritmo" o "usuario"
         # (antes usabas author_id = None para algoritmo;
         #  ahora usamos siempre system_author_id en su lugar).
-        is_algorithm = rng.random() < 0.1  # ~10% algoritmo, 90% usuario (ajusta si quieres)
+        is_algorithm = rng.random() < 0.1  # ~10% algoritmo, 90% usuario
 
         if is_algorithm and system_author_id is not None:
             # Puzzles "del algoritmo" → autor fijo Kiwi
@@ -214,7 +222,7 @@ def gen_puzzles(rng: random.Random, count: int, user_ids, system_author_id: int 
 
         board_spec = gen_board_spec(N, rng, allowed_ops)
 
-        diff = rng.randint(1, 5)          # dificultad 1–5 siempre
+        diff = rng.randint(1, 5)          # dificultad 1–5
         num_solutions = rng.randint(1, 6) # al menos 1 solución
 
         puzzles.append((author_id, title, N, board_spec, num_solutions, diff))
@@ -452,6 +460,8 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Deterministic ETL/seed script for the Kiwi Num Slide backend."
     )
+
+    # RNG y cantidades
     parser.add_argument("--seed", type=int, default=2025, help="RNG seed for reproducible data.")
     parser.add_argument("--users", type=int, default=60, help="Number of users to generate.")
     parser.add_argument("--puzzles", type=int, default=120, help="Number of puzzles to generate.")
@@ -482,6 +492,35 @@ def parse_args():
             "Without this flag, no DELETE/TRUNCATE is performed."
         ),
     )
+
+    # Parámetros de conexión a DB (por defecto salen del .env)
+    parser.add_argument(
+        "--db-host",
+        default=os.getenv("DB_HOST", "localhost"),
+        help="Database host (overrides DB_HOST).",
+    )
+    parser.add_argument(
+        "--db-port",
+        type=int,
+        default=int(os.getenv("DB_PORT", "5432")),
+        help="Database port (overrides DB_PORT).",
+    )
+    parser.add_argument(
+        "--db-user",
+        default=os.getenv("DB_USER", "appuser"),
+        help="Database user (overrides DB_USER).",
+    )
+    parser.add_argument(
+        "--db-password",
+        default=os.getenv("DB_PASSWORD", "changeme"),
+        help="Database password (overrides DB_PASSWORD).",
+    )
+    parser.add_argument(
+        "--db-name",
+        default=os.getenv("DB_NAME", "kiwi_num_slide_dev"),
+        help="Database name (overrides DB_NAME).",
+    )
+
     return parser.parse_args()
 
 
@@ -490,17 +529,21 @@ def main():
     args = parse_args()
     rng = make_rng(args.seed)
 
-    # Connection config from environment
+    # Connection config (CLI -> env -> defaults)
     cfg = dict(
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=int(os.getenv("DB_PORT")),
-        dbname=os.getenv("DB_NAME"),
+        user=args.db_user,
+        password=args.db_password,
+        host=args.db_host,
+        port=args.db_port,
+        dbname=args.db_name,
     )
 
     start_d = date.fromisoformat(args.daily_start)
     end_d = date.fromisoformat(args.daily_end)
+
+    print(
+        f"Connecting to postgres://{cfg['user']}@{cfg['host']}:{cfg['port']}/{cfg['dbname']}"
+    )
 
     with psycopg.connect(**cfg) as conn:
         conn.execute("BEGIN;")
