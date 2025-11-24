@@ -15,8 +15,6 @@ from app.services.user_service import _build_avatar_url
 import json
 from typing import Any, Dict, List, Optional
 
-REVALIDATE_URL = os.getenv("REVALIDATE_URL")
-REVALIDATE_SECRET = os.getenv("REVALIDATE_SECRET")
 DAILY_TZ = os.getenv("DAILY_TZ", "UTC")  # p.ej. "America/Puerto_Rico"
 ALGORITHM_AUTHOR_ID = 1
 
@@ -232,17 +230,6 @@ def patch_puzzle(
     # Si no hay fila devuelta, no cambió nada (mismos valores)
     changed = bool(updated)
 
-    # 4) Revalidación ISR cuando cambia el título (slug cambia)
-    if changed and title and REVALIDATE_URL and REVALIDATE_SECRET:
-        try:
-            new_slug = _slugify(title)
-            requests.post(
-                REVALIDATE_URL,
-                json={"secret": REVALIDATE_SECRET, "paths": [f"/p/{puzzle_id}-{new_slug}"]},
-                timeout=3,
-            )
-        except Exception as e:
-            print(f"[WARN] Revalidate request failed: {e}")
 
     return {"ok": True, "changed": changed}
 
@@ -274,16 +261,6 @@ def delete_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
     # 4) Borrar
     deleted = puzzles_repo.delete_puzzle_owned(puzzle_id, current_user_id)
 
-    # 5) Revalidate: invalidar la ruta pública exacta del puzzle
-    if deleted and REVALIDATE_URL and REVALIDATE_SECRET:
-        try:
-            requests.post(
-                REVALIDATE_URL,
-                json={"secret": REVALIDATE_SECRET, "paths": [path_to_invalidate]},
-                timeout=3,
-            )
-        except Exception as e:
-            print(f"[WARN] Revalidate request failed: {e}")
 
     return {"ok": True, "deleted": bool(deleted)}
 
