@@ -52,6 +52,8 @@ origins = [
     "http://localhost:3000",
     "https://janieljoelnunezquintana.com",
     "https://www.janieljoelnunezquintana.com",
+    "https://kiwinumslide.com",
+    "https://www.kiwinumslide.com",
 ]
 app.add_middleware(
     CORSMiddleware,
