@@ -3,9 +3,11 @@ import os
 import re
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
+from app.core.config import settings
 
-AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
-SES_SENDER_EMAIL = os.getenv("SES_SENDER_EMAIL")
+
+AWS_REGION = settings.aws_region
+SES_SENDER_EMAIL = settings.ses_sender_email
 
 _ses = boto3.client("sesv2", region_name=AWS_REGION)
 

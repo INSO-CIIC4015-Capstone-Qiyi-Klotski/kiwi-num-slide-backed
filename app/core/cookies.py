@@ -1,6 +1,6 @@
 import os
 from datetime import timedelta
-
+from app.core.config import settings
 from fastapi import Response, Cookie, Header, HTTPException
 
 ACCESS_COOKIE = "access_token"
@@ -8,8 +8,8 @@ REFRESH_COOKIE = "refresh_token"
 CSRF_COOKIE = "csrf_token"
 
 # Env flags
-USE_CROSS_SITE_COOKIES = os.getenv("CROSS_SITE_COOKIES", "0") == "1"
-COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")  # ej: ".kiwinumslide.com"
+USE_CROSS_SITE_COOKIES = settings.cross_site_cookies == "1"
+COOKIE_DOMAIN = settings.cookie_domain  # ej: ".kiwinumslide.com"
 
 
 def _cookie_params(prod: bool):

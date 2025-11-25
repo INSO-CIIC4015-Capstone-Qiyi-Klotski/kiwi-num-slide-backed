@@ -7,14 +7,14 @@ from fastapi import Depends, HTTPException, Request, Cookie
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
 from starlette import status
+from app.core.config import settings
 
 # === Config ===
-JWT_SECRET = os.getenv("JWT_SECRET", "change-me-in-prod")
+JWT_SECRET = settings.jwt_secret
 JWT_ALG = "HS256"
 
-
-ACCESS_MINUTES = int(os.getenv("ACCESS_TOKEN_MINUTES", "60"))
-REFRESH_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "3"))
+ACCESS_MINUTES = int(settings.access_token_minutes)
+REFRESH_DAYS = int(settings.refresh_token_days)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

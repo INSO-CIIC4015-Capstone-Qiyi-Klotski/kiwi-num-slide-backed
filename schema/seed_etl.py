@@ -77,6 +77,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 from psycopg.types.json import Json
+from app.core.config import settings
 
 
 # Resolve project root (one level above schema/)
@@ -496,28 +497,28 @@ def parse_args():
     # Parámetros de conexión a DB (por defecto salen del .env)
     parser.add_argument(
         "--db-host",
-        default=os.getenv("DB_HOST", "localhost"),
+        default=settings.db_host,
         help="Database host (overrides DB_HOST).",
     )
     parser.add_argument(
         "--db-port",
         type=int,
-        default=int(os.getenv("DB_PORT", "5432")),
+        default=int(settings.db_port),
         help="Database port (overrides DB_PORT).",
     )
     parser.add_argument(
         "--db-user",
-        default=os.getenv("DB_USER", "appuser"),
+        default=settings.db_user,
         help="Database user (overrides DB_USER).",
     )
     parser.add_argument(
         "--db-password",
-        default=os.getenv("DB_PASSWORD", "changeme"),
+        default=settings.db_password,
         help="Database password (overrides DB_PASSWORD).",
     )
     parser.add_argument(
         "--db-name",
-        default=os.getenv("DB_NAME", "kiwi_num_slide_dev"),
+        default=settings.db_name,
         help="Database name (overrides DB_NAME).",
     )
 

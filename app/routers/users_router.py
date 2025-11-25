@@ -16,8 +16,10 @@ from app.core.security import get_current_token_cookie_or_header
 from app.core.cookies import require_csrf
 from app.services.user_service import AVATAR_CDN_BASE
 
-AVATAR_BUCKET = os.getenv("AVATAR_BUCKET", "avatarcatalog")
-AVATAR_PREFIX = os.getenv("AVATAR_PREFIX", "avatars/")
+from app.core.config import settings
+
+AVATAR_BUCKET = settings.avatar_bucket
+AVATAR_PREFIX = settings.avatar_prefix
 
 router = APIRouter(prefix="/users", tags=["users"])
 

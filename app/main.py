@@ -9,18 +9,22 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.routers import auth_router, health_router, users_router, puzzles_router
 from app.services import puzzle_service
+from app.core.config import settings
+from app.core.logging import app_logger
+
+
 
 def daily_puzzle_job():
     info = puzzle_service.ensure_daily_puzzle_for_today(auto_generate_fallback=True)
-    print(f"🧩 Daily publish: {info}")
+    app_logger.info(f"🧩 Daily publish: {info}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    disable = os.getenv("DISABLE_SCHEDULER") == "1" or os.getenv("TESTING") == "1"
+    disable = settings.disable_scheduler == "1"
     scheduler = None
 
     if not disable:
-        tz = ZoneInfo(os.getenv("DAILY_TZ", "UTC"))
+        tz = ZoneInfo(settings.daily_tz)
         scheduler = BackgroundScheduler(timezone=tz)
         scheduler.add_job(
             daily_puzzle_job,
@@ -34,7 +38,7 @@ async def lifespan(app: FastAPI):
         )
         scheduler.start()
         next_run = scheduler.get_job("daily_publisher").next_run_time
-        print(f"🕛 Daily publisher programado: {next_run.astimezone(tz)} [{tz.key}]")
+        app_logger.info(f"🕛 Daily publisher programado: {next_run.astimezone(tz)} [{tz.key}]")
 
     app.state.scheduler = scheduler
     try:

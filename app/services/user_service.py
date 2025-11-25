@@ -8,9 +8,10 @@ from fastapi import HTTPException
 from starlette import status
 from datetime import datetime
 from app.repositories import users_repo
+from app.core.config import settings
 
 
-AVATAR_CDN_BASE = os.getenv("AVATAR_CDN_BASE", "").rstrip("/")
+AVATAR_CDN_BASE = settings.avatar_cdn_base.rstrip("/")
 
 def _slugify(value: str) -> str:
     # Normaliza acentos y convierte a ASCII

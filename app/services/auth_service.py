@@ -11,7 +11,10 @@ from ..core.security import create_verify_token, decode_token
 from ..repositories import users_repo
 from ..services.email_services import send_simple_email, SES_SENDER_EMAIL, AWS_REGION
 
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL")
+from app.core.config import settings
+
+
+PUBLIC_BASE_URL = settings.public_base_url
 
 def register_user(name: str, email: str, password: str) -> dict:
     existing = users_repo.get_user_by_email(email)

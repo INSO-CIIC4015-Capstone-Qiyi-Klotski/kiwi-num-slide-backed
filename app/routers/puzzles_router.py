@@ -11,6 +11,7 @@ from datetime import date as _date
 
 from app.core.security import get_current_token_cookie_or_header
 from app.core.cookies import require_csrf
+from app.core.config import settings
 
 router = APIRouter(prefix="/puzzles", tags=["puzzles"])
 
@@ -221,7 +222,7 @@ def generate_puzzles(
     secret: Optional[str] = Query(None),
     x_gen_secret: Optional[str] = Header(None, alias="X-Gen-Secret"),
 ):
-    expected = os.getenv("GENERATION_SECRET")
+    expected = settings.generation_secret
     provided = secret or x_gen_secret
     if not expected or provided != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -231,7 +232,7 @@ def generate_puzzles(
 
 @router.post("/daily/ensure")
 def ensure_daily(secret: Optional[str] = Query(None), x_gen_secret: Optional[str] = Header(None, alias="X-Gen-Secret")):
-    expected = os.getenv("GENERATION_SECRET")
+    expected = settings.generation_secret
     provided = secret or x_gen_secret
     if not expected or provided != expected:
         raise HTTPException(status_code=403, detail="Forbidden")
