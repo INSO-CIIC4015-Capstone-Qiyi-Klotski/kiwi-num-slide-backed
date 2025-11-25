@@ -161,11 +161,6 @@ def create_puzzle(
         "created_at": row["created_at"].isoformat(),
     }
 
-def get_puzzles_ssg_seed(limit: int = 200) -> dict:
-    rows = puzzles_repo.list_puzzles_ssg_seed(limit)
-    items = [{"id": r["id"], "tag": _slugify(r["title"])} for r in rows]
-    return {"items": items, "count": len(items)}
-
 
 def get_puzzle_details(puzzle_id: int) -> dict | None:
     row = puzzles_repo.get_puzzle_by_id(puzzle_id)
@@ -198,73 +193,6 @@ def get_puzzle_details(puzzle_id: int) -> dict | None:
         "likes_count": row.get("likes_count", 0),
         "solves_count": row.get("solves_count", 0),
     }
-
-
-
-
-def patch_puzzle(
-    *, current_user_id: int, puzzle_id: int,
-    title: Optional[str], size: Optional[int],
-    board_spec: Optional[dict], difficulty: Optional[int],
-    num_solutions: Optional[int],
-) -> dict:
-    # 1) Al menos un campo
-    if all(v is None for v in (title, size, board_spec, difficulty, num_solutions)):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Provide at least one field to update")
-
-    # 2) Verifica que exista y su autor
-    owner = puzzles_repo.get_puzzle_author_id(puzzle_id)
-    if owner is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
-    if owner != current_user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the author")
-
-    # 3) Ejecuta el update
-    updated = puzzles_repo.update_puzzle_owned(
-        puzzle_id=puzzle_id, author_id=current_user_id,
-        title=title, size=size, board_spec=board_spec,
-        difficulty=difficulty, num_solutions=num_solutions,
-    )
-
-    # Si no hay fila devuelta, no cambió nada (mismos valores)
-    changed = bool(updated)
-
-
-    return {"ok": True, "changed": changed}
-
-
-
-
-def delete_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
-    # 1) Existe y autor correcto
-    owner = puzzles_repo.get_puzzle_author_id(puzzle_id)
-    if owner is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
-    if owner != current_user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the author")
-
-    # 2) Lee el título/slug ANTES de borrar, para invalidar la ruta exacta
-    row = puzzles_repo.get_puzzle_by_id(puzzle_id)
-    if not row:
-        # raro: existía para author_id pero no al leer; tratamos como 404
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
-
-    title = row.get("title") or "puzzle"
-    slug = _slugify(title)
-    path_to_invalidate = f"/p/{puzzle_id}-{slug}"
-
-    # 3) Bloqueo por daily_puzzles
-    if puzzles_repo.puzzle_has_daily_reference(puzzle_id):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Puzzle is referenced by daily_puzzles")
-
-    # 4) Borrar
-    deleted = puzzles_repo.delete_puzzle_owned(puzzle_id, current_user_id)
-
-
-    return {"ok": True, "deleted": bool(deleted)}
-
-
 
 
 def browse_puzzles_public(
@@ -414,12 +342,6 @@ def unlike_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
 
     changed = puzzles_repo.delete_puzzle_like(current_user_id, puzzle_id)
     return {"ok": True, "changed": bool(changed)}
-
-
-def get_puzzle_like_count(puzzle_id: int) -> dict:
-    if not puzzles_repo.puzzle_exists(puzzle_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
-    return {"count": puzzles_repo.count_puzzle_likes(puzzle_id)}
 
 
 def submit_puzzle_solve(

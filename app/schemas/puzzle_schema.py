@@ -36,16 +36,6 @@ class PuzzleOut(BaseModel):
     solves_count: int = 0
 
 
-class PuzzlesSSGSeedItem(BaseModel):
-    id: int
-    tag: str  # slug del título
-
-class PuzzlesSSGSeedResponse(BaseModel):
-    items: List[PuzzlesSSGSeedItem]
-    count: int
-
-
-
 class PuzzleUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     size: Optional[int] = Field(None, ge=1, le=10)
@@ -59,16 +49,6 @@ class PuzzleUpdate(BaseModel):
         if v is not None and not isinstance(v, dict):
             raise ValueError("board_spec debe ser un objeto JSON")
         return v
-
-class PuzzleUpdateAck(BaseModel):
-    ok: bool
-    changed: bool
-
-
-
-class PuzzleDeleteAck(BaseModel):
-    ok: bool
-    deleted: bool
 
 
 class PuzzleListItem(BaseModel):
@@ -94,10 +74,6 @@ class PuzzleListPage(BaseModel):
 class LikeAck(BaseModel):
     ok: bool
     changed: bool  # True si se creó el like; False si ya existía (idempotente)
-
-
-class LikeCount(BaseModel):
-    count: int
 
 
 class PuzzleSolveCreate(BaseModel):

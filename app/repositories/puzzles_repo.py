@@ -33,19 +33,6 @@ def insert_puzzle(
     return dict(row)
 
 
-
-def list_puzzles_ssg_seed(limit: int = 200) -> list[dict]:
-    sql = text("""
-        SELECT id, title
-        FROM puzzles
-        ORDER BY id
-        LIMIT :limit
-    """)
-    with get_conn() as conn:
-        rows = conn.execute(sql, {"limit": limit}).mappings().all()
-    return [dict(r) for r in rows]
-
-
 def get_puzzle_by_id(puzzle_id: int) -> dict | None:
     sql = text("""
         SELECT
@@ -381,13 +368,6 @@ def delete_puzzle_like(user_id: int, puzzle_id: int) -> bool:
     with get_tx() as conn:
         row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
     return row is not None
-
-
-def count_puzzle_likes(puzzle_id: int) -> int:
-    sql = text("SELECT COUNT(*) AS c FROM puzzle_likes WHERE puzzle_id = :pid")
-    with get_conn() as conn:
-        row = conn.execute(sql, {"pid": puzzle_id}).mappings().first()
-    return int(row["c"]) if row else 0
 
 
 def insert_puzzle_solve(

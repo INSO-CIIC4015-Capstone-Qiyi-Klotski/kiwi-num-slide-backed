@@ -100,22 +100,6 @@ def logout(response: Response, request: Request):
     return {"ok": True}
 
 
-
-@router.get("/me", response_model=UserOut)
-def read_me(token_data: dict = Depends(security.get_current_token_cookie_or_header)):
-    """
-    Protegido: ahora acepta Authorization: Bearer ... **o** cookie 'access_token'.
-    """
-    user_id = int(token_data["sub"])
-    user = users_repo.get_user_by_id(user_id)
-    return {
-        "id": user["id"],
-        "name": user["name"],
-        "email": user["email"],
-        "is_verified": bool(user["is_verified"]),
-    }
-
-
 @router.get("/status", response_model=StatusOut)
 def auth_status(
     token_data: dict | None = Depends(get_current_token_optional_cookie_or_header),

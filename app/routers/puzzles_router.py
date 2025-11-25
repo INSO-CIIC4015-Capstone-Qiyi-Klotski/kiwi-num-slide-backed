@@ -4,8 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, status, Response, Query, Path, HTTPException, Header
 from app.core.security import get_current_token
 from app.schemas.puzzle_generation_schema import PuzzleGenConfig, GenerateAck, generate_puzzles_responses
-from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzlesSSGSeedResponse, PuzzleUpdateAck, PuzzleUpdate, \
-    PuzzleDeleteAck, PuzzleListPage, LikeAck, LikeCount, PuzzleSolveOut, PuzzleSolveCreate, MySolvesPage, DailyPuzzleOut
+from app.schemas.puzzle_schema import PuzzleCreate, PuzzleOut, PuzzleUpdate, \
+    PuzzleListPage, LikeAck, PuzzleSolveOut, PuzzleSolveCreate, MySolvesPage, DailyPuzzleOut
 from app.services import puzzle_service, puzzle_generation
 from datetime import date as _date
 
@@ -31,11 +31,6 @@ def create_puzzle(payload: PuzzleCreate, token=Depends(get_current_token_cookie_
         response.headers["Location"] = f"/puzzles/{data['id']}"
     return data
 
-
-
-@router.get("/ssg-seed", response_model=PuzzlesSSGSeedResponse)
-def puzzles_ssg_seed(limit: int = Query(200, ge=1, le=1000)):
-    return puzzle_service.get_puzzles_ssg_seed(limit)
 
 @router.get("/daily-puzzle", response_model=DailyPuzzleOut)
 def get_daily_puzzle(response: Response):
@@ -69,36 +64,6 @@ def get_puzzle(puzzle_id: int = Path(..., ge=1), response: Response = None):
     if response is not None:
         response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=60"
     return data
-
-
-@router.patch("/{puzzle_id}", response_model=PuzzleUpdateAck)
-def patch_puzzle(
-    puzzle_id: int = Path(..., ge=1),
-    payload: PuzzleUpdate = None,
-    token = Depends(get_current_token_cookie_or_header),
-    _csrf = Depends(require_csrf),
-):
-    current_user_id = int(token["sub"])
-    return puzzle_service.patch_puzzle(
-        current_user_id=current_user_id,
-        puzzle_id=puzzle_id,
-        title=payload.title,
-        size=payload.size,
-        board_spec=payload.board_spec,
-        difficulty=payload.difficulty,
-        num_solutions=payload.num_solutions,
-    )
-
-
-
-@router.delete("/{puzzle_id}", response_model=PuzzleDeleteAck)
-def delete_puzzle(
-    puzzle_id: int = Path(..., ge=1),
-    token=Depends(get_current_token_cookie_or_header),
-    _csrf=Depends(require_csrf),
-):
-    current_user_id = int(token["sub"])
-    return puzzle_service.delete_puzzle(current_user_id=current_user_id, puzzle_id=puzzle_id)
 
 
 @router.get("", response_model=PuzzleListPage)
@@ -162,18 +127,6 @@ def unlike_puzzle(
 ):
     user_id = int(token["sub"])
     return puzzle_service.unlike_puzzle(current_user_id=user_id, puzzle_id=puzzle_id)
-
-
-@router.get("/{puzzle_id}/likes/count", response_model=LikeCount)
-def get_puzzle_likes_count(
-    puzzle_id: int = Path(..., ge=1),
-    response: Response = None,
-):
-    data = puzzle_service.get_puzzle_like_count(puzzle_id)
-    if response is not None:
-        # ISR-safe: cache público en edge/CDN
-        response.headers["Cache-Control"] = "public, s-maxage=120, stale-while-revalidate=60"
-    return data
 
 
 @router.post("/{puzzle_id}/solves", response_model=PuzzleSolveOut, status_code=status.HTTP_201_CREATED)
