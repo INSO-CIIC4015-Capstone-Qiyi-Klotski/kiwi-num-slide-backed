@@ -47,7 +47,6 @@ def _get_env(name: str) -> str | None:
 
 
 def _debug_value(name: str, value: str | None):
-    """Log DEBUG literal de la variable."""
     logger.debug(f"{name} = {value}")
 
 
@@ -70,7 +69,6 @@ def load_settings() -> Settings:
         "AVATAR_BUCKET": "avatar_bucket",
         "AVATAR_CDN_BASE": "avatar_cdn_base",
         "AVATAR_PREFIX": "avatar_prefix",
-        "COOKIE_DOMAIN": "cookie_domain",
     }
 
     raw: dict[str, object] = {}
@@ -92,6 +90,25 @@ def load_settings() -> Settings:
     # -------------------------
     # 2) Optional variables
     # -------------------------
+
+    # COOKIE_DOMAIN — ahora es opcional
+    cd = _get_env("COOKIE_DOMAIN")
+    _debug_value("COOKIE_DOMAIN", cd)
+
+    if not cd:
+        logger.warning(
+            "⚠ COOKIE_DOMAIN is empty. Cookies will be host-only "
+            "(recommended for localhost / tunnels)."
+        )
+
+    raw["cookie_domain"] = cd or ""
+
+    # Cross-site flag
+    csc = _get_env("CROSS_SITE_COOKIES")
+    _debug_value("CROSS_SITE_COOKIES", csc)
+    raw["cross_site_cookies"] = int(csc) if csc else 0
+
+    # Token durations
     atm = _get_env("ACCESS_TOKEN_MINUTES")
     _debug_value("ACCESS_TOKEN_MINUTES", atm)
     raw["access_token_minutes"] = int(atm) if atm else 60
@@ -100,20 +117,18 @@ def load_settings() -> Settings:
     _debug_value("REFRESH_TOKEN_DAYS", rtd)
     raw["refresh_token_days"] = int(rtd) if rtd else 3
 
+    # Daily puzzle timezone
     daily_tz = _get_env("DAILY_TZ")
     _debug_value("DAILY_TZ", daily_tz)
     raw["daily_tz"] = daily_tz or "UTC"
 
+    # Optional secrets
     gen = _get_env("GENERATION_SECRET")
     _debug_value("GENERATION_SECRET", gen)
     raw["generation_secret"] = gen
 
-    csc = _get_env("CROSS_SITE_COOKIES")
-    _debug_value("CROSS_SITE_COOKIES", csc)
-    raw["cross_site_cookies"] = int(csc) if csc else 0
-
+    # Scheduler toggle
     raw["disable_scheduler"] = _get_env("DISABLE_SCHEDULER") == "1"
-
     _debug_value("DISABLE_SCHEDULER", raw["disable_scheduler"])
 
     # -------------------------

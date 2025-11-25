@@ -8,7 +8,7 @@ REFRESH_COOKIE = "refresh_token"
 CSRF_COOKIE = "csrf_token"
 
 # Env flags
-USE_CROSS_SITE_COOKIES = settings.cross_site_cookies == "1"
+USE_CROSS_SITE_COOKIES = settings.cross_site_cookies == 1
 COOKIE_DOMAIN = settings.cookie_domain  # ej: ".kiwinumslide.com"
 
 
