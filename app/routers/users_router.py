@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, Path, HTTPException, Depends, Response
 from starlette import status
 
 from app.core.security import get_current_token
-from app.schemas.user_schema import SSGSeedResponse, PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck, \
+from app.schemas.user_schema import PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck, \
     FollowingPage, MyLikedPuzzlesPage, MySolvesPage, UserListPage, AvatarCatalogResponse, AvatarItem, UpdateAvatarBody
 from app.services import user_service
 
@@ -52,11 +52,6 @@ def list_avatars():
         items.append(AvatarItem(key=key, url=url))
 
     return AvatarCatalogResponse(items=items)
-
-
-@router.get("/ssg-seed", response_model=SSGSeedResponse)
-def ssg_seed(limit: int = Query(200, ge=1, le=1000)):
-    return user_service.get_ssg_seed(limit)
 
 
 @router.get("/me", response_model=MyProfile)

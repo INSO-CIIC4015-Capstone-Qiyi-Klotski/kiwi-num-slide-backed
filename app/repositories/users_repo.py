@@ -4,56 +4,41 @@ from sqlalchemy import text
 from ..db import get_tx, get_conn
 
 
-def insert_user(name: str, email: str, password_hash: str) -> dict:
+def insert_user(conn, name: str, email: str, password_hash: str) -> dict:
     sql = text("""
         INSERT INTO users (name, email, password_hash)
         VALUES (:name, LOWER(:email), :password_hash)
         RETURNING id, name, email, is_verified;
     """)
-    with get_tx() as conn:
-        row = conn.execute(sql, {"name": name, "email": email, "password_hash": password_hash}).mappings().first()
+
+    row = conn.execute(sql, {"name": name, "email": email, "password_hash": password_hash}).mappings().first()
     return dict(row)
 
 
-def get_user_by_email(email: str) -> dict | None:
+def get_user_by_email(conn, email: str) -> dict | None:
     sql = text("""
         SELECT id, name, email, password_hash, is_verified
         FROM users WHERE LOWER(email) = LOWER(:email);
     """)
-    with get_conn() as conn:
-        row = conn.execute(sql, {"email": email}).mappings().first()
+
+    row = conn.execute(sql, {"email": email}).mappings().first()
     return dict(row) if row else None
 
 
-def get_user_by_id(user_id: int) -> dict | None:
+def get_user_by_id(conn, user_id: int) -> dict | None:
     sql = text("""
         SELECT id, name, email, password_hash, is_verified, avatar_key
         FROM users WHERE id = :id
     """)
-    with get_conn() as conn:
-        row = conn.execute(sql, {"id": user_id}).mappings().first()
+    row = conn.execute(sql, {"id": user_id}).mappings().first()
     return dict(row) if row else None
 
 
-def mark_verified(user_id: int):
-    with get_tx() as conn:
-        conn.execute(text("UPDATE users SET is_verified = TRUE WHERE id = :id"), {"id": user_id})
+def mark_verified(conn, user_id: int):
+    conn.execute(text("UPDATE users SET is_verified = TRUE WHERE id = :id"), {"id": user_id})
 
 
-def list_ssg_seed(limit: int = 200):
-    sql = text("""
-        SELECT id, name
-        FROM users
-        ORDER BY id
-        LIMIT :limit
-    """)
-    with get_conn() as conn:
-        rows = conn.execute(sql, {"limit": limit}).mappings().all()
-    return [dict(r) for r in rows]
-
-
-
-def get_public_user_with_stats(user_id: int) -> dict | None:
+def get_public_user_with_stats(conn, user_id: int) -> dict | None:
     sql = text("""
         SELECT
             u.id,
@@ -88,13 +73,12 @@ def get_public_user_with_stats(user_id: int) -> dict | None:
         ) fo ON fo.user_id = u.id
         WHERE u.id = :id
     """)
-    with get_conn() as conn:
-        row = conn.execute(sql, {"id": user_id}).mappings().first()
+    row = conn.execute(sql, {"id": user_id}).mappings().first()
     return dict(row) if row else None
 
 
 
-def get_private_user_with_stats(user_id: int) -> dict | None:
+def get_private_user_with_stats(conn, user_id: int) -> dict | None:
     sql = text("""
         SELECT
             u.id,
@@ -130,13 +114,12 @@ def get_private_user_with_stats(user_id: int) -> dict | None:
         ) g ON g.user_id = u.id
         WHERE u.id = :id
     """)
-    with get_conn() as conn:
-        row = conn.execute(sql, {"id": user_id}).mappings().first()
+    row = conn.execute(sql, {"id": user_id}).mappings().first()
     return dict(row) if row else None
 
 
 
-def update_user_profile(user_id: int, name: Optional[str], avatar_key: Optional[str]) -> bool:
+def update_user_profile(conn, user_id: int, name: Optional[str], avatar_key: Optional[str]) -> bool:
     sets, params = [], {"id": user_id}
     if name is not None:
         sets.append("name = :name")
@@ -148,20 +131,18 @@ def update_user_profile(user_id: int, name: Optional[str], avatar_key: Optional[
         return False  # nada que actualizar
 
     sql = text(f"UPDATE users SET {', '.join(sets)} WHERE id = :id")
-    with get_tx() as conn:
-        result = conn.execute(sql, params)
-        # En SQLAlchemy 2.x, rowcount puede ser -1 con algunos drivers; si pasa, asumimos True
-        return (result.rowcount is None) or (result.rowcount < 0) or (result.rowcount > 0)
+    result = conn.execute(sql, params)
+    # En SQLAlchemy 2.x, rowcount puede ser -1 con algunos drivers; si pasa, asumimos True
+    return (result.rowcount is None) or (result.rowcount < 0) or (result.rowcount > 0)
 
 
 
-def user_exists(user_id: int) -> bool:
+def user_exists(conn, user_id: int) -> bool:
     sql = text("SELECT 1 FROM users WHERE id = :id")
-    with get_conn() as conn:
-        row = conn.execute(sql, {"id": user_id}).first()
+    row = conn.execute(sql, {"id": user_id}).first()
     return row is not None
 
-def create_follow(follower_id: int, followee_id: int) -> bool:
+def create_follow(conn, follower_id: int, followee_id: int) -> bool:
     """
     Crea el follow si no existe. Devuelve True si se insertó, False si ya existía.
     """
@@ -171,12 +152,11 @@ def create_follow(follower_id: int, followee_id: int) -> bool:
         ON CONFLICT (follower_id, followee_id) DO NOTHING
         RETURNING id;
     """)
-    with get_tx() as conn:
-        row = conn.execute(sql, {"follower_id": follower_id, "followee_id": followee_id}).first()
+    row = conn.execute(sql, {"follower_id": follower_id, "followee_id": followee_id}).first()
     return row is not None
 
 
-def delete_follow(follower_id: int, followee_id: int) -> bool:
+def delete_follow(conn, follower_id: int, followee_id: int) -> bool:
     """
     Elimina el follow si existe.
     Devuelve True si se borró, False si no existía (idempotente).
@@ -186,13 +166,12 @@ def delete_follow(follower_id: int, followee_id: int) -> bool:
         WHERE follower_id = :follower_id AND followee_id = :followee_id
         RETURNING id;
     """)
-    with get_tx() as conn:
-        row = conn.execute(sql, {"follower_id": follower_id, "followee_id": followee_id}).first()
+    row = conn.execute(sql, {"follower_id": follower_id, "followee_id": followee_id}).first()
     return row is not None
 
 
 
-def list_following(follower_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
+def list_following(conn, follower_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
     """
     Devuelve hasta `limit + 1` filas para detectar si hay siguiente página.
     Campos: follow_id, follow_created_at, user.*
@@ -215,14 +194,13 @@ def list_following(follower_id: int, limit: int, cursor: Optional[int]) -> list[
 
     base_sql += " ORDER BY f.id DESC LIMIT :limit"
 
-    with get_conn() as conn:
-        rows = conn.execute(text(base_sql), params).mappings().all()
+    rows = conn.execute(text(base_sql), params).mappings().all()
 
     return [dict(r) for r in rows]
 
 
 
-def list_followers(followee_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
+def list_followers(conn, followee_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
     """
     Devuelve hasta `limit + 1` filas para detectar next page.
     Retorna:
@@ -247,13 +225,12 @@ def list_followers(followee_id: int, limit: int, cursor: Optional[int]) -> list[
 
     base_sql += " ORDER BY f.id DESC LIMIT :limit"
 
-    with get_conn() as conn:
-        rows = conn.execute(text(base_sql), params).mappings().all()
+    rows = conn.execute(text(base_sql), params).mappings().all()
 
     return [dict(r) for r in rows]
 
 
-def list_my_puzzle_likes(user_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
+def list_my_puzzle_likes(conn, user_id: int, limit: int, cursor: Optional[int]) -> list[dict]:
     """
     Devuelve hasta limit+1 filas para detectar next page.
     Ordenado por puzzle_likes.id DESC (keyset).
@@ -282,15 +259,14 @@ def list_my_puzzle_likes(user_id: int, limit: int, cursor: Optional[int]) -> lis
 
     base_sql += " ORDER BY pl.id DESC LIMIT :limit"
 
-    with get_conn() as conn:
-        rows = conn.execute(text(base_sql), params).mappings().all()
+    rows = conn.execute(text(base_sql), params).mappings().all()
 
     return [dict(r) for r in rows]
 
 
 
 def list_my_solves(
-    *, user_id: int, limit: int, cursor_id: Optional[int]
+    conn, *, user_id: int, limit: int, cursor_id: Optional[int]
 ) -> List[Dict[str, Any]]:
     """
     Devuelve solves del usuario (todas los puzzles), ordenados por ps.id DESC.
@@ -319,14 +295,13 @@ def list_my_solves(
 
     sql += " ORDER BY ps.id DESC LIMIT :limit"
 
-    with get_conn() as conn:
-        rows = conn.execute(text(sql), params).mappings().all()
+    rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
 
 
 def browse_users_public(
-    *,
+    conn, *,
     limit: int,
     cursor_id: Optional[int],
     cursor_primary: Optional[Any],
@@ -466,7 +441,6 @@ def browse_users_public(
         LIMIT :limit
     """
 
-    with get_conn() as conn:
-        rows = conn.execute(text(sql), params).mappings().all()
+    rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]

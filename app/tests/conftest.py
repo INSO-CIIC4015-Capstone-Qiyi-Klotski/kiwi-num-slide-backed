@@ -1,7 +1,19 @@
 import os, sys
+from dotenv import load_dotenv   # <-- añade esto
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+# .../kiwi-num-slide-backed/app/tests -> subir dos niveles hasta la raíz del repo
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+# Cargar variables de entorno desde tu .env.local (ajusta el nombre si usas otro)
+load_dotenv(os.path.join(ROOT, ".env.local"))
+
+# Para los tests queremos que el scheduler nunca arranque
+os.environ.setdefault("DISABLE_SCHEDULER", "1")
 
 from app.main import app
 # Routers reales en tu árbol:
@@ -14,10 +26,7 @@ from app.routers.health_router import router as health_router
 from app.core.security import get_current_token_cookie_or_header
 from app.core.cookies import require_csrf
 
-# .../kiwi-num-slide-backed/app/tests -> subir dos niveles hasta la raíz del repo
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+
 
 @pytest.fixture
 def client_auth(monkeypatch):

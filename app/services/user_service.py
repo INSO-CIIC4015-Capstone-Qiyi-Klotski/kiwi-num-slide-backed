@@ -9,6 +9,7 @@ from starlette import status
 from datetime import datetime
 from app.repositories import users_repo
 from app.core.config import settings
+from app.db import get_tx
 
 
 AVATAR_CDN_BASE = settings.avatar_cdn_base.rstrip("/")
@@ -29,14 +30,10 @@ def _build_avatar_url(avatar_key: Optional[str]) -> Optional[str]:
         return None
     return f"{AVATAR_CDN_BASE}/{avatar_key.lstrip('/')}"
 
-def get_ssg_seed(limit: int = 200):
-    rows = users_repo.list_ssg_seed(limit)
-    items = [{"id": r["id"], "tag": _slugify(r["name"])} for r in rows]
-    return {"items": items, "count": len(items)}
-
 
 def get_public_profile(user_id: int) -> dict | None:
-    row = users_repo.get_public_user_with_stats(user_id)
+    with get_tx() as conn:
+        row = users_repo.get_public_user_with_stats(conn, user_id)
     if not row:
         return None
     slug = _slugify(row["name"])
@@ -57,7 +54,8 @@ def get_public_profile(user_id: int) -> dict | None:
 
 
 def get_my_profile(user_id: int) -> dict | None:
-    row = users_repo.get_private_user_with_stats(user_id)
+    with get_tx() as conn:
+        row = users_repo.get_private_user_with_stats(conn, user_id)
     if not row:
         return None
     slug = _slugify(row["name"])
@@ -84,7 +82,8 @@ def patch_my_profile(user_id: int, name: str | None, avatar_key: str | None) -> 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Provide at least one of: name, avatar_key")
 
-    changed = users_repo.update_user_profile(user_id, name=name, avatar_key=avatar_key)
+    with get_tx() as conn:
+        changed = users_repo.update_user_profile(conn, user_id, name=name, avatar_key=avatar_key)
 
     return {"ok": True, "changed": bool(changed)}
 
@@ -95,12 +94,13 @@ def follow_user(current_user_id: int, target_user_id: int) -> dict:
     if current_user_id == target_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot follow yourself")
 
-    # Verifica que el target exista
-    if not users_repo.user_exists(target_user_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    with get_tx() as conn:
+        # Verifica que el target exista
+        if not users_repo.user_exists(conn, target_user_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    # Intenta crear el follow (idempotente)
-    changed = users_repo.create_follow(current_user_id, target_user_id)
+        # Intenta crear el follow (idempotente)
+        changed = users_repo.create_follow(conn, current_user_id, target_user_id)
 
     return {"ok": True, "changed": bool(changed)}
 
@@ -110,12 +110,13 @@ def unfollow_user(current_user_id: int, target_user_id: int) -> dict:
     if current_user_id == target_user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot unfollow yourself")
 
-    # Verifica que el target exista
-    if not users_repo.user_exists(target_user_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    with get_tx() as conn:
+        # Verifica que el target exista
+        if not users_repo.user_exists(conn, target_user_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    # Intenta eliminar el follow (idempotente)
-    changed = users_repo.delete_follow(current_user_id, target_user_id)
+        # Intenta eliminar el follow (idempotente)
+        changed = users_repo.delete_follow(conn, current_user_id, target_user_id)
 
     return {"ok": True, "changed": bool(changed)}
 
@@ -125,7 +126,8 @@ def list_my_following(current_user_id: int, limit: int, cursor: Optional[str]) -
     # Normaliza cursor (id de follows)
     cursor_id: Optional[int] = int(cursor) if cursor else None
 
-    rows = users_repo.list_following(current_user_id, limit=limit, cursor=cursor_id)
+    with get_tx() as conn:
+        rows = users_repo.list_following(conn, current_user_id, limit=limit, cursor=cursor_id)
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -151,7 +153,9 @@ def list_my_following(current_user_id: int, limit: int, cursor: Optional[str]) -
 
 def list_my_followers(current_user_id: int, limit: int, cursor: Optional[str]) -> dict:
     cursor_id: Optional[int] = int(cursor) if cursor else None
-    rows = users_repo.list_followers(current_user_id, limit=limit, cursor=cursor_id)
+
+    with get_tx() as conn:
+        rows = users_repo.list_followers(conn, current_user_id, limit=limit, cursor=cursor_id)
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -175,11 +179,13 @@ def list_my_followers(current_user_id: int, limit: int, cursor: Optional[str]) -
 def list_my_puzzle_likes(current_user_id: int, limit: int, cursor: Optional[str]) -> dict:
     cursor_id: Optional[int] = int(cursor) if cursor else None
 
-    rows = users_repo.list_my_puzzle_likes(
-        user_id=current_user_id,
-        limit=limit,
-        cursor=cursor_id,
-    )
+    with get_tx() as conn:
+        rows = users_repo.list_my_puzzle_likes(
+            conn,
+            user_id=current_user_id,
+            limit=limit,
+            cursor=cursor_id,
+        )
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -215,11 +221,13 @@ def list_my_puzzle_likes(current_user_id: int, limit: int, cursor: Optional[str]
 def list_all_my_solves(current_user_id: int, limit: int, cursor: Optional[str]) -> Dict[str, Any]:
     cursor_id = int(cursor) if cursor else None
 
-    rows = users_repo.list_my_solves(
-        user_id=current_user_id,
-        limit=limit,
-        cursor_id=cursor_id,
-    )
+    with get_tx() as conn:
+        rows = users_repo.list_my_solves(
+            conn,
+            user_id=current_user_id,
+            limit=limit,
+            cursor_id=cursor_id,
+        )
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -290,15 +298,17 @@ def browse_users_public(
             # soporte legacy: solo id
             cursor_id = int(cursor)
 
-    rows = users_repo.browse_users_public(
-        limit=limit,
-        cursor_id=cursor_id,
-        cursor_primary=cursor_primary,
-        q=q,
-        sort=sort,
-        followers_of=followers_of,
-        following_of=following_of,
-    )
+    with get_tx() as conn:
+        rows = users_repo.browse_users_public(
+            conn,
+            limit=limit,
+            cursor_id=cursor_id,
+            cursor_primary=cursor_primary,
+            q=q,
+            sort=sort,
+            followers_of=followers_of,
+            following_of=following_of,
+        )
 
     has_more = len(rows) > limit
     rows = rows[:limit]

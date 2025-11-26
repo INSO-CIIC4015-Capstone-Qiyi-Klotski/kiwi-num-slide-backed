@@ -8,6 +8,7 @@ ALGORITHM_AUTHOR_ID = 1  # puzzles generados por el algoritmo (usuario Kiwi)
 
 
 def insert_puzzle(
+    conn,
     *, author_id: int, title: str, size: int,
     board_spec: Dict[str, Any], difficulty: Optional[int],
     num_solutions: Optional[int]
@@ -20,20 +21,19 @@ def insert_puzzle(
         bindparam("board_spec", type_=JSONB)  # <- clave: tipa el parámetro como JSONB
     )
 
-    with get_tx() as conn:
-        row = conn.execute(sql, {
-            "author_id": author_id,
-            "title": title,
-            "size": size,
-            "board_spec": board_spec,        # dict -> JSONB
-            "difficulty": difficulty,
-            "num_solutions": num_solutions,
-        }).mappings().first()
+    row = conn.execute(sql, {
+        "author_id": author_id,
+        "title": title,
+        "size": size,
+        "board_spec": board_spec,        # dict -> JSONB
+        "difficulty": difficulty,
+        "num_solutions": num_solutions,
+    }).mappings().first()
 
     return dict(row)
 
 
-def get_puzzle_by_id(puzzle_id: int) -> dict | None:
+def get_puzzle_by_id(conn, puzzle_id: int) -> dict | None:
     sql = text("""
         SELECT
             p.id,
@@ -68,19 +68,18 @@ def get_puzzle_by_id(puzzle_id: int) -> dict | None:
             u.name,
             u.avatar_key
     """)
-    with get_conn() as conn:
-        row = conn.execute(sql, {"puzzle_id": puzzle_id}).mappings().first()
+    row = conn.execute(sql, {"puzzle_id": puzzle_id}).mappings().first()
     return dict(row) if row else None
 
 
 
-def get_puzzle_author_id(puzzle_id: int) -> Optional[int]:
+def get_puzzle_author_id(conn, puzzle_id: int) -> Optional[int]:
     sql = text("SELECT author_id FROM puzzles WHERE id = :id")
-    with get_conn() as conn:
-        row = conn.execute(sql, {"id": puzzle_id}).first()
+    row = conn.execute(sql, {"id": puzzle_id}).first()
     return None if not row else row[0]
 
 def update_puzzle_owned(
+    conn,
     *, puzzle_id: int, author_id: int,
     title: Optional[str], size: Optional[int],
     board_spec: Optional[Dict[str, Any]],
@@ -122,18 +121,16 @@ def update_puzzle_owned(
     if board_spec is not None:
         sql = sql.bindparams(bindparam("board_spec", type_=JSONB))
 
-    with get_tx() as conn:
-        row = conn.execute(sql, params).mappings().first()
+    row = conn.execute(sql, params).mappings().first()
     return None if not row else dict(row)
 
 
-def puzzle_has_daily_reference(puzzle_id: int) -> bool:
+def puzzle_has_daily_reference(conn, puzzle_id: int) -> bool:
     sql = text("SELECT 1 FROM daily_puzzles WHERE puzzle_id = :pid LIMIT 1")
-    with get_conn() as conn:
-        row = conn.execute(sql, {"pid": puzzle_id}).first()
+    row = conn.execute(sql, {"pid": puzzle_id}).first()
     return row is not None
 
-def delete_puzzle_owned(puzzle_id: int, author_id: int) -> bool:
+def delete_puzzle_owned(conn, puzzle_id: int, author_id: int) -> bool:
     """
     Borra el puzzle si pertenece al author_id. Devuelve True si eliminó 1 fila.
     """
@@ -142,14 +139,14 @@ def delete_puzzle_owned(puzzle_id: int, author_id: int) -> bool:
         WHERE id = :id AND author_id = :author_id
         RETURNING id
     """)
-    with get_tx() as conn:
-        row = conn.execute(sql, {"id": puzzle_id, "author_id": author_id}).first()
+    row = conn.execute(sql, {"id": puzzle_id, "author_id": author_id}).first()
     return row is not None
 
 
 
 
 def browse_puzzles_public(
+    conn,
     *,
     limit: int,
     cursor_id: Optional[int],
@@ -328,19 +325,17 @@ def browse_puzzles_public(
         LIMIT :limit
     """
 
-    with get_conn() as conn:
-        rows = conn.execute(text(sql), params).mappings().all()
+    rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
 
 
-def puzzle_exists(puzzle_id: int) -> bool:
+def puzzle_exists(conn, puzzle_id: int) -> bool:
     sql = text("SELECT 1 FROM puzzles WHERE id = :id")
-    with get_conn() as conn:
-        row = conn.execute(sql, {"id": puzzle_id}).first()
+    row = conn.execute(sql, {"id": puzzle_id}).first()
     return row is not None
 
-def create_puzzle_like(user_id: int, puzzle_id: int) -> bool:
+def create_puzzle_like(conn, user_id: int, puzzle_id: int) -> bool:
     """
     Crea el like si no existe. Devuelve True si se insertó, False si ya existía.
     """
@@ -350,12 +345,11 @@ def create_puzzle_like(user_id: int, puzzle_id: int) -> bool:
         ON CONFLICT (user_id, puzzle_id) DO NOTHING
         RETURNING id;
     """)
-    with get_tx() as conn:
-        row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
+    row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
     return row is not None
 
 
-def delete_puzzle_like(user_id: int, puzzle_id: int) -> bool:
+def delete_puzzle_like(conn, user_id: int, puzzle_id: int) -> bool:
     """
     Elimina el like si existe.
     Devuelve True si borró una fila (changed), False si no existía (idempotente).
@@ -365,12 +359,12 @@ def delete_puzzle_like(user_id: int, puzzle_id: int) -> bool:
         WHERE user_id = :user_id AND puzzle_id = :puzzle_id
         RETURNING id;
     """)
-    with get_tx() as conn:
-        row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
+    row = conn.execute(sql, {"user_id": user_id, "puzzle_id": puzzle_id}).first()
     return row is not None
 
 
 def insert_puzzle_solve(
+    conn,
     *, user_id: int, puzzle_id: int, movements: int, duration_ms: int, solution: Optional[Dict[str, Any]]
 ) -> dict:
     sql = text("""
@@ -382,19 +376,19 @@ def insert_puzzle_solve(
     if solution is not None:
         sql = sql.bindparams(bindparam("solution", type_=JSONB))
 
-    with get_tx() as conn:
-        row = conn.execute(sql, {
-            "user_id": user_id,
-            "puzzle_id": puzzle_id,
-            "movements": movements,
-            "duration_ms": duration_ms,
-            "solution": solution,
-        }).mappings().first()
+    row = conn.execute(sql, {
+        "user_id": user_id,
+        "puzzle_id": puzzle_id,
+        "movements": movements,
+        "duration_ms": duration_ms,
+        "solution": solution,
+    }).mappings().first()
     return dict(row)
 
 
 
 def list_my_solves_for_puzzle(
+    conn,
     *, user_id: int, puzzle_id: int, limit: int, cursor_id: Optional[int]
 ) -> List[Dict[str, Any]]:
     """
@@ -424,14 +418,13 @@ def list_my_solves_for_puzzle(
 
     sql += " ORDER BY ps.id DESC LIMIT :limit"
 
-    with get_conn() as conn:
-        rows = conn.execute(text(sql), params).mappings().all()
+    rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
 
 
 
-def get_daily_puzzle_by_date(d: date) -> dict | None:
+def get_daily_puzzle_by_date(conn, d: date) -> dict | None:
     sql = text("""
         SELECT
             dp.date                         AS dp_date,
@@ -449,13 +442,12 @@ def get_daily_puzzle_by_date(d: date) -> dict | None:
         WHERE dp.date = :d
         LIMIT 1
     """)
-    with get_conn() as conn:
-        row = conn.execute(sql, {"d": d}).mappings().first()
+    row = conn.execute(sql, {"d": d}).mappings().first()
     return dict(row) if row else None
 
 
 
-def get_daily_puzzle_by_date(d: date) -> dict | None:
+def get_daily_puzzle_by_date(conn, d: date) -> dict | None:
     sql = text("""
         SELECT
             dp.id               AS dp_id,
@@ -475,12 +467,11 @@ def get_daily_puzzle_by_date(d: date) -> dict | None:
         WHERE dp.date = :d
         LIMIT 1
     """)
-    with get_conn() as conn:
-        row = conn.execute(sql, {"d": d}).mappings().first()
+    row = conn.execute(sql, {"d": d}).mappings().first()
     return dict(row) if row else None
 
 
-def pick_unused_generated_puzzle(limit: int = 50) -> Optional[int]:
+def pick_unused_generated_puzzle(conn, limit: int = 50) -> Optional[int]:
     """
     Devuelve un puzzle.id cuyo author_id = -1 y que NO esté referenciado en daily_puzzles.
     Se prefiere uno reciente. Si no hay, retorna None.
@@ -494,8 +485,7 @@ def pick_unused_generated_puzzle(limit: int = 50) -> Optional[int]:
         ORDER BY p.created_at DESC
         LIMIT :limit
     """)
-    with get_conn() as conn:
-        rows = conn.execute(sql, {"limit": limit}).fetchall()
+    rows = conn.execute(sql, {"limit": limit}).fetchall()
     if not rows:
         return None
     # elige el primero (más reciente). Si prefieres aleatorio,
@@ -503,7 +493,7 @@ def pick_unused_generated_puzzle(limit: int = 50) -> Optional[int]:
     return int(rows[0][0])
 
 
-def upsert_daily_puzzle(d: date, puzzle_id: int) -> bool:
+def upsert_daily_puzzle(conn, d: date, puzzle_id: int) -> bool:
     """
     Inserta (date, puzzle_id) en daily_puzzles si la fecha no existe todavía.
     Devuelve True si insertó, False si ya existía.
@@ -514,6 +504,5 @@ def upsert_daily_puzzle(d: date, puzzle_id: int) -> bool:
         ON CONFLICT (date) DO NOTHING
         RETURNING id
     """)
-    with get_tx() as conn:
-        row = conn.execute(sql, {"d": d, "pid": puzzle_id}).first()
+    row = conn.execute(sql, {"d": d, "pid": puzzle_id}).first()
     return row is not None

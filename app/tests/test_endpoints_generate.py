@@ -1,7 +1,7 @@
 import os
 from fastapi.testclient import TestClient
 import pytest
-
+from app.core.config import settings
 
 def _payload():
     """Helper function returning a valid JSON payload matching the PuzzleGenConfig schema."""
@@ -40,15 +40,10 @@ def test_generate_201_ok(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     """
         Verifies that /puzzles/generate successfully triggers puzzle generation
         when the correct secret is provided.
-
-        This test:
-        - Sets the GENERATION_SECRET environment variable to "top-secret".
-        - Mocks puzzle_generation.generate_and_store_puzzles() to return fake generation stats.
-        - Sends a POST request to /puzzles/generate with the proper secret query parameter.
-        - Ensures that the endpoint returns HTTP 201 Created.
-        - Validates that the JSON response contains correct keys (requested, inserted, N, difficulty).
-        """
+        ...
+    """
     monkeypatch.setenv("GENERATION_SECRET", "top-secret")
+    settings.generation_secret = "top-secret"
 
     # Mockea la función de generación/almacenamiento para no tocar DB real
     from app.services import puzzle_generation as gen

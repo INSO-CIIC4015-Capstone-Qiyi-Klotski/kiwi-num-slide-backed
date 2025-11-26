@@ -116,20 +116,4 @@ def auth_status(
         )
 
     user_id = int(token_data["sub"])
-    user = users_repo.get_user_by_id(user_id)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    return {
-        "verified": bool(user["is_verified"]),
-        "user": {
-            "id": user["id"],
-            "name": user["name"],
-            "email": user["email"],
-            "is_verified": bool(user["is_verified"]),
-        },
-    }
+    return auth_service.get_auth_status(user_id)

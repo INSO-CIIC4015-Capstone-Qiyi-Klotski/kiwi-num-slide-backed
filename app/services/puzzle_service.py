@@ -14,6 +14,7 @@ from app.services.user_service import _build_avatar_url
 
 import json
 from typing import Any, Dict, List, Optional
+from app.db import get_tx
 
 DAILY_TZ = os.getenv("DAILY_TZ", "UTC")  # p.ej. "America/Puerto_Rico"
 ALGORITHM_AUTHOR_ID = 1
@@ -97,34 +98,35 @@ def ensure_daily_puzzle_for_today(auto_generate_fallback: bool = True) -> dict:
     """
     today = _today_local_date()
 
-    # Si ya existe, no repetimos
-    if puzzles_repo.get_daily_puzzle_by_date(today):
-        return {"ok": True, "skipped": True, "reason": "already_set", "date": today.isoformat()}
+    with get_tx() as conn:
+        # Si ya existe, no repetimos
+        if puzzles_repo.get_daily_puzzle_by_date(conn, today):
+            return {"ok": True, "skipped": True, "reason": "already_set", "date": today.isoformat()}
 
-    # Intentar elegir uno disponible
-    pid = puzzles_repo.pick_unused_generated_puzzle(limit=50)
+        # Intentar elegir uno disponible
+        pid = puzzles_repo.pick_unused_generated_puzzle(conn, limit=50)
 
-    # Fallback opcional: generar uno si no hay
-    if pid is None and auto_generate_fallback:
-        gen = puzzle_generation.generate_and_store_puzzles(
-            count=1,
-            N=4,
-            difficulty=3,
-            allowed_numbers=[2, 3, 4, 5, 6],
-            operators_spec=[("+", None), ("-", None), ("*", 2), ("/", 2)],
-            require_unique=True,
-            max_attempts=300,
-            include_solutions=True,
-            solutions_cap=1,
-        )
-        # vuelve a buscar uno libre
-        pid = puzzles_repo.pick_unused_generated_puzzle(limit=1)
+        # Fallback opcional: generar uno si no hay
+        if pid is None and auto_generate_fallback:
+            gen = puzzle_generation.generate_and_store_puzzles(
+                count=1,
+                N=4,
+                difficulty=3,
+                allowed_numbers=[2, 3, 4, 5, 6],
+                operators_spec=[("+", None), ("-", None), ("*", 2), ("/", 2)],
+                require_unique=True,
+                max_attempts=300,
+                include_solutions=True,
+                solutions_cap=1,
+            )
+            # vuelve a buscar uno libre
+            pid = puzzles_repo.pick_unused_generated_puzzle(conn, limit=1)
 
-    if pid is None:
-        # No se pudo asignar daily
-        raise HTTPException(status_code=409, detail="No available generated puzzles to schedule for daily")
+        if pid is None:
+            # No se pudo asignar daily
+            raise HTTPException(status_code=409, detail="No available generated puzzles to schedule for daily")
 
-    inserted = puzzles_repo.upsert_daily_puzzle(today, pid)
+        inserted = puzzles_repo.upsert_daily_puzzle(conn, today, pid)
     return {
         "ok": inserted,
         "date": today.isoformat(),
@@ -139,14 +141,16 @@ def create_puzzle(
 ) -> dict:
 
     try:
-        row = puzzles_repo.insert_puzzle(
-            author_id=author_id,
-            title=title,
-            size=size,
-            board_spec=board_spec,
-            difficulty=difficulty,
-            num_solutions=num_solutions,
-        )
+        with get_tx() as conn:
+            row = puzzles_repo.insert_puzzle(
+                conn,
+                author_id=author_id,
+                title=title,
+                size=size,
+                board_spec=board_spec,
+                difficulty=difficulty,
+                num_solutions=num_solutions,
+            )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid puzzle payload") from e
 
@@ -163,7 +167,8 @@ def create_puzzle(
 
 
 def get_puzzle_details(puzzle_id: int) -> dict | None:
-    row = puzzles_repo.get_puzzle_by_id(puzzle_id)
+    with get_tx() as conn:
+        row = puzzles_repo.get_puzzle_by_id(conn, puzzle_id)
     if not row:
         return None
 
@@ -251,18 +256,20 @@ def browse_puzzles_public(
         filtered = [op for op in raw if op in allowed_ops]
         operators_list = filtered or None
 
-    rows = puzzles_repo.browse_puzzles_public(
-        limit=limit,
-        cursor_id=cursor_id,
-        cursor_primary=cursor_primary,  # 👈 nuevo
-        size=size,
-        q=q,
-        sort=sort,
-        min_likes=min_likes,
-        author_id=author_id,
-        generated_by=generated_by,
-        operators=operators_list,
-    )
+    with get_tx() as conn:
+        rows = puzzles_repo.browse_puzzles_public(
+            conn,
+            limit=limit,
+            cursor_id=cursor_id,
+            cursor_primary=cursor_primary,  # 👈 nuevo
+            size=size,
+            q=q,
+            sort=sort,
+            min_likes=min_likes,
+            author_id=author_id,
+            generated_by=generated_by,
+            operators=operators_list,
+        )
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -329,41 +336,45 @@ def browse_puzzles_public(
 
 
 def like_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
-    if not puzzles_repo.puzzle_exists(puzzle_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+    with get_tx() as conn:
+        if not puzzles_repo.puzzle_exists(conn, puzzle_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
 
-    changed = puzzles_repo.create_puzzle_like(current_user_id, puzzle_id)
+        changed = puzzles_repo.create_puzzle_like(conn, current_user_id, puzzle_id)
     return {"ok": True, "changed": bool(changed)}
 
 
 def unlike_puzzle(*, current_user_id: int, puzzle_id: int) -> dict:
-    if not puzzles_repo.puzzle_exists(puzzle_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+    with get_tx() as conn:
+        if not puzzles_repo.puzzle_exists(conn, puzzle_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
 
-    changed = puzzles_repo.delete_puzzle_like(current_user_id, puzzle_id)
+        changed = puzzles_repo.delete_puzzle_like(conn, current_user_id, puzzle_id)
     return {"ok": True, "changed": bool(changed)}
 
 
 def submit_puzzle_solve(
     *, current_user_id: int, puzzle_id: int, movements: int, duration_ms: int, solution: Optional[Dict[str, Any]]
 ) -> dict:
-    # Validar existencia del puzzle
-    if not puzzles_repo.puzzle_exists(puzzle_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+    with get_tx() as conn:
+        # Validar existencia del puzzle
+        if not puzzles_repo.puzzle_exists(conn, puzzle_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
 
-    # (Opcional) validar que movements/duration sean razonables, anti-cheat, etc.
+        # (Opcional) validar que movements/duration sean razonables, anti-cheat, etc.
 
-    try:
-        row = puzzles_repo.insert_puzzle_solve(
-            user_id=current_user_id,
-            puzzle_id=puzzle_id,
-            movements=movements,
-            duration_ms=duration_ms,
-            solution=solution,
-        )
-    except Exception as e:
-        # Mantén el detalle limpio hacia el cliente
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid solve payload") from e
+        try:
+            row = puzzles_repo.insert_puzzle_solve(
+                conn,
+                user_id=current_user_id,
+                puzzle_id=puzzle_id,
+                movements=movements,
+                duration_ms=duration_ms,
+                solution=solution,
+            )
+        except Exception as e:
+            # Mantén el detalle limpio hacia el cliente
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid solve payload") from e
 
     return {
         "id": row["id"],
@@ -380,16 +391,19 @@ def list_my_solves_for_puzzle(
     *, current_user_id: int, puzzle_id: int, limit: int, cursor: Optional[str]
 ) -> Dict[str, Any]:
     # 404 si el puzzle no existe
-    if not puzzles_repo.puzzle_exists(puzzle_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
-
     cursor_id = int(cursor) if cursor else None
-    rows = puzzles_repo.list_my_solves_for_puzzle(
-        user_id=current_user_id,
-        puzzle_id=puzzle_id,
-        limit=limit,
-        cursor_id=cursor_id,
-    )
+
+    with get_tx() as conn:
+        if not puzzles_repo.puzzle_exists(conn, puzzle_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Puzzle not found")
+
+        rows = puzzles_repo.list_my_solves_for_puzzle(
+            conn,
+            user_id=current_user_id,
+            puzzle_id=puzzle_id,
+            limit=limit,
+            cursor_id=cursor_id,
+        )
 
     has_more = len(rows) > limit
     rows = rows[:limit]
@@ -409,9 +423,11 @@ def list_my_solves_for_puzzle(
 
 def get_today_daily_puzzle() -> dict | None:
     today = _today_local_date()
-    row = puzzles_repo.get_daily_puzzle_by_date(today)
+    with get_tx() as conn:
+        row = puzzles_repo.get_daily_puzzle_by_date(conn, today)
     return None if not row else _map_daily_row(row)
 
 def get_daily_puzzle_for_date(d: _date) -> dict | None:
-    row = puzzles_repo.get_daily_puzzle_by_date(d)
+    with get_tx() as conn:
+        row = puzzles_repo.get_daily_puzzle_by_date(conn, d)
     return None if not row else _map_daily_row(row)

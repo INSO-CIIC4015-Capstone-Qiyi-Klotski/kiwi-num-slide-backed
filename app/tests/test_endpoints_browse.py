@@ -26,8 +26,16 @@ def test_browse_puzzles_ok(monkeypatch):
         ],
         "next_cursor": "10"
     }
-    monkeypatch.setattr(puzzle_service, "browse_puzzles_public",
-                        lambda limit, cursor, size, q, sort: fake_page)
+
+    # ⬇️ nuevo mock compatible con todos los kwargs (min_likes, author_id, etc.)
+    def fake_browse_puzzles_public(**kwargs):
+        return fake_page
+
+    monkeypatch.setattr(
+        puzzle_service,
+        "browse_puzzles_public",
+        fake_browse_puzzles_public,
+    )
 
     res = client.get("/puzzles?limit=1&sort=created_at_desc")
     assert res.status_code == 200
