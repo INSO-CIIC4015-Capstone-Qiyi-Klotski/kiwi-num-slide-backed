@@ -67,24 +67,26 @@ Notes
 - Using the same seed and the same parameters will always produce the same dataset.
 """
 
+
 import argparse
 import os
-from datetime import date, timedelta
-import random
-import string
-from pathlib import Path
 
-import psycopg
 from dotenv import load_dotenv
-from psycopg.types.json import Json
-from app.core.config import settings
-
-
+from pathlib import Path
 # Resolve project root (one level above schema/)
 BASE_DIR = Path(__file__).resolve().parent.parent
 ENV_PATH = BASE_DIR / ".env.local"
 
 load_dotenv(ENV_PATH)
+
+from datetime import date, timedelta
+import random
+import string
+
+
+import psycopg
+from psycopg.types.json import Json
+from app.core.config import settings
 
 
 # -------------------------

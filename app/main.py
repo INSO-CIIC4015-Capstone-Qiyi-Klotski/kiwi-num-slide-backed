@@ -58,6 +58,7 @@ origins = [
     "https://www.janieljoelnunezquintana.com",
     "https://kiwinumslide.com",
     "https://www.kiwinumslide.com",
+    "http://host.docker.internal:3000",
 ]
 app.add_middleware(
     CORSMiddleware,
