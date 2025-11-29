@@ -54,30 +54,46 @@ def list_avatars():
     return AvatarCatalogResponse(items=items)
 
 
-@router.get("/me", response_model=MyProfile)
-def get_me(token=Depends(get_current_token_cookie_or_header)):
-    user_id = int(token["sub"])
-    data = user_service.get_my_profile(user_id)
-    if not data:
-        # si el token es válido pero el usuario ya no existe
-        raise HTTPException(status_code=404, detail="User not found")
-    # Importante: perfil propio es privado → NO cache público
-    return data
-
-
 @router.patch("/me", response_model=UpdateAck, status_code=200)
-def patch_me(payload: UpdateMyProfile, token=Depends(get_current_token_cookie_or_header),
-             _csrf=Depends(require_csrf), ):
-    if payload.name is None and payload.avatar_key is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Provide at least one of: name, avatar_key")
-
+def patch_me(
+    payload: UpdateMyProfile,
+    token = Depends(get_current_token_cookie_or_header),
+    _csrf = Depends(require_csrf),
+):
     user_id = int(token["sub"])
-    return user_service.patch_my_profile(
-        user_id,
-        name=payload.name,
-        avatar_key=payload.avatar_key,
+
+    # Normalizamos los campos
+    name = payload.name.strip() if payload.name is not None else None
+    avatar_key = payload.avatar_key.strip() if payload.avatar_key is not None else None
+
+    # Validación: al menos uno
+    if (not name) and (not avatar_key):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one of: name, avatar_key",
+        )
+
+    # Validación extra del avatar_key
+    if avatar_key is not None:
+        if not avatar_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="avatar_key is required",
+            )
+
+        if not avatar_key.startswith(AVATAR_PREFIX):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid avatar key",
+            )
+
+    result = user_service.patch_my_profile(
+        user_id=user_id,
+        name=name,
+        avatar_key=avatar_key,
     )
+
+    return result
 
 
 @router.get("/{user_id}", response_model=PublicUser)
@@ -113,45 +129,6 @@ def unfollow_user(
     follower_id = int(token["sub"])
     return user_service.unfollow_user(follower_id, user_id)
 
-
-@router.get("/me/following", response_model=FollowingPage)
-def get_my_following(
-        limit: int = Query(20, ge=1, le=100),
-        cursor: Optional[str] = Query(None),
-        token=Depends(get_current_token_cookie_or_header),
-):
-    current_user_id = int(token["sub"])
-    return user_service.list_my_following(current_user_id, limit=limit, cursor=cursor)
-
-
-@router.get("/me/followers", response_model=FollowingPage)
-def get_my_followers(
-        limit: int = Query(20, ge=1, le=100),
-        cursor: Optional[str] = Query(None),
-        token=Depends(get_current_token_cookie_or_header),
-):
-    current_user_id = int(token["sub"])
-    return user_service.list_my_followers(current_user_id, limit=limit, cursor=cursor)
-
-
-@router.get("/me/puzzle-likes", response_model=MyLikedPuzzlesPage)
-def get_my_puzzle_likes(
-        limit: int = Query(20, ge=1, le=100),
-        cursor: Optional[str] = Query(None),
-        token=Depends(get_current_token_cookie_or_header),
-):
-    current_user_id = int(token["sub"])
-    return user_service.list_my_puzzle_likes(current_user_id, limit, cursor)
-
-
-@router.get("/me/solves", response_model=MySolvesPage)
-def get_all_my_solves(
-        limit: int = Query(20, ge=1, le=100),
-        cursor: Optional[str] = Query(None),
-        token=Depends(get_current_token_cookie_or_header),
-):
-    current_user_id = int(token["sub"])
-    return user_service.list_all_my_solves(current_user_id, limit, cursor)
 
 
 @router.get("", response_model=UserListPage)
@@ -192,46 +169,3 @@ def browse_users(
     ] = "public, s-maxage=120, stale-while-revalidate=60"
     return data
 
-
-
-
-@router.patch("/me/avatar", response_model=PublicUser)
-def update_my_avatar(
-    body: UpdateAvatarBody,
-    token = Depends(get_current_token_cookie_or_header),
-    _csrf = Depends(require_csrf),
-):
-    """
-    Actualiza el avatar_key del usuario autenticado y devuelve su perfil público.
-    """
-    key = (body.avatar_key or "").strip()
-
-    if not key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="avatar_key is required",
-        )
-
-    # Validación simple: debe estar bajo el prefijo esperado (avatars/...)
-    if not key.startswith(AVATAR_PREFIX):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid avatar key",
-        )
-
-    user_id = int(token["sub"])
-
-    # Reutilizamos la lógica existente de patch_my_profile
-    # (ignoramos el retorno de UpdateAck)
-    user_service.patch_my_profile(
-        user_id,
-        name=None,
-        avatar_key=key,
-    )
-
-    # Devolvemos el perfil público actualizado
-    data = user_service.get_public_profile(user_id)
-    if not data:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return data

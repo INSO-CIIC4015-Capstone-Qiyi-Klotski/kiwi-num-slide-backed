@@ -14,10 +14,6 @@ class VerifyEmailIn(BaseModel):
     email: EmailStr
 
 
-class VerifyTokenIn(BaseModel):
-    token: str
-
-
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
@@ -29,10 +25,6 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     is_verified: bool
-
-
-class VerifyOut(BaseModel):
-    ok: bool
 
 
 class LoginOut(BaseModel):

@@ -2,16 +2,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
 
-class SSGSeedItem(BaseModel):
-    id: int
-    tag: str
-
-
-class SSGSeedResponse(BaseModel):
-    items: List[SSGSeedItem]
-    count: int
-
-
 class PublicUserStats(BaseModel):
     puzzles: int
     likes_received: int
