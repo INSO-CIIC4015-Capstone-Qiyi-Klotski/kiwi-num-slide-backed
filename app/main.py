@@ -54,11 +54,13 @@ app = FastAPI(title="three-tier BE", lifespan=lifespan)
 # CORS, etc.
 origins = [
     "http://localhost:3000",
+    "http://localhost:8130",
     "https://janieljoelnunezquintana.com",
     "https://www.janieljoelnunezquintana.com",
     "https://kiwinumslide.com",
     "https://www.kiwinumslide.com",
     "http://host.docker.internal:3000",
+    "http://host.docker.internal:8130",
 ]
 app.add_middleware(
     CORSMiddleware,
