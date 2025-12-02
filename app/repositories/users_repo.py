@@ -444,3 +444,64 @@ def browse_users_public(
     rows = conn.execute(text(sql), params).mappings().all()
 
     return [dict(r) for r in rows]
+
+
+
+def list_puzzles_liked_by_user(
+    conn,
+    *,
+    user_id: int,
+    limit: int,
+    cursor_id: Optional[int],
+) -> List[Dict[str, Any]]:
+    """
+    Puzzles a los que `user_id` les ha dado like.
+    Ordenados por puzzle_likes.id DESC (keyset).
+    Devuelve hasta limit+1 filas para detectar next page.
+    """
+    sql = """
+        SELECT
+            pl.id             AS like_id,
+            pl.created_at     AS like_created_at,
+
+            p.id              AS puzzle_id,
+            p.title           AS puzzle_title,
+            p.size            AS puzzle_size,
+            p.difficulty      AS puzzle_difficulty,
+            p.created_at      AS puzzle_created_at,
+
+            au.id             AS author_id,
+            au.name           AS author_name,
+            au.avatar_key     AS author_avatar_key,
+
+            COALESCE(lk.likes_count, 0)   AS likes_count,
+            COALESCE(sv.solves_count, 0)  AS solves_count
+        FROM puzzle_likes pl
+        JOIN puzzles p ON p.id = pl.puzzle_id
+        LEFT JOIN users au ON au.id = p.author_id
+        LEFT JOIN (
+            SELECT puzzle_id, COUNT(*) AS likes_count
+            FROM puzzle_likes
+            GROUP BY puzzle_id
+        ) lk ON lk.puzzle_id = p.id
+        LEFT JOIN (
+            SELECT puzzle_id, COUNT(*) AS solves_count
+            FROM puzzle_solves
+            GROUP BY puzzle_id
+        ) sv ON sv.puzzle_id = p.id
+        WHERE pl.user_id = :user_id
+    """
+
+    params: Dict[str, Any] = {
+        "user_id": user_id,
+        "limit": limit + 1,
+    }
+
+    if cursor_id:
+        sql += " AND pl.id < :cursor_id"
+        params["cursor_id"] = cursor_id
+
+    sql += " ORDER BY pl.id DESC LIMIT :limit"
+
+    rows = conn.execute(text(sql), params).mappings().all()
+    return [dict(r) for r in rows]

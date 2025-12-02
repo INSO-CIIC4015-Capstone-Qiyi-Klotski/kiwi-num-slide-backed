@@ -10,6 +10,9 @@ from starlette import status
 from app.core.security import get_current_token
 from app.schemas.user_schema import PublicUser, MyProfile, UpdateAck, UpdateMyProfile, FollowAck, \
     FollowingPage, MyLikedPuzzlesPage, MySolvesPage, UserListPage, AvatarCatalogResponse, AvatarItem, UpdateAvatarBody
+
+from app.schemas.puzzle_schema import PuzzleListPage
+
 from app.services import user_service
 
 from app.core.security import get_current_token_cookie_or_header
@@ -108,6 +111,30 @@ def get_user_public_profile(
     if response is not None:
         response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=60"
     return data
+
+
+@router.get("/{user_id}/puzzles/likes", response_model=PuzzleListPage)
+def list_user_liked_puzzles(
+    user_id: int = Path(..., ge=1),
+    response: Response = None,
+    limit: int = Query(20, ge=1, le=100),
+    cursor: Optional[str] = Query(None),
+):
+    """
+    Lista de puzzles a los que el usuario `user_id` les ha dado like.
+    Público, con paginación por cursor (puzzle_likes.id).
+    """
+    data = user_service.list_puzzles_liked_by_user(
+        user_id=user_id,
+        limit=limit,
+        cursor=cursor,
+    )
+
+    if response is not None:
+        response.headers["Cache-Control"] = "public, s-maxage=120, stale-while-revalidate=60"
+
+    return data
+
 
 
 @router.post("/{user_id}/follow", response_model=FollowAck)

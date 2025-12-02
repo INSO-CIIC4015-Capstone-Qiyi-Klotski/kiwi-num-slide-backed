@@ -348,3 +348,69 @@ def browse_users_public(
         next_cursor = None
 
     return {"items": items, "next_cursor": next_cursor}
+
+
+
+def list_puzzles_liked_by_user(
+    user_id: int,
+    limit: int,
+    cursor: Optional[str],
+) -> Dict[str, Any]:
+    """
+    Lista pública de puzzles a los que un usuario (user_id) les ha dado like.
+    Responde con el shape de PuzzleListPage.
+    """
+    cursor_id: Optional[int] = int(cursor) if cursor else None
+
+    with get_tx() as conn:
+        # Validar que el usuario exista
+        if not users_repo.user_exists(conn, user_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        rows = users_repo.list_puzzles_liked_by_user(
+            conn,
+            user_id=user_id,
+            limit=limit,
+            cursor_id=cursor_id,
+        )
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+
+    items: List[Dict[str, Any]] = []
+
+    for r in rows:
+        # Autor opcional
+        author_block = None
+        if r.get("author_id"):
+            author_name = r.get("author_name") or "Unknown"
+            author_block = {
+                "id": r["author_id"],
+                "slug": _slugify(author_name),
+                "display_name": author_name,
+                "avatar_url": _build_avatar_url(r.get("author_avatar_key")),
+            }
+
+        items.append(
+            {
+                "id": r["puzzle_id"],
+                "slug": _slugify(r["puzzle_title"]),
+                "title": r["puzzle_title"],
+                "size": r["puzzle_size"],
+                "difficulty": r["puzzle_difficulty"],
+                "created_at": r["puzzle_created_at"].isoformat(),
+                "author": author_block,
+                "likes_count": r["likes_count"],
+                "solves_count": r["solves_count"],
+                # Si más adelante tienes columnas/JSON para esto, aquí las mapeas
+                "generated_by": None,
+                "operators": [],
+            }
+        )
+
+    next_cursor = str(rows[-1]["like_id"]) if has_more and rows else None
+
+    return {
+        "items": items,
+        "next_cursor": next_cursor,
+    }
