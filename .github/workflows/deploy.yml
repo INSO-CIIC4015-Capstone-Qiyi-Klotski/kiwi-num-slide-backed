@@ -16,6 +16,28 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    env:
+      # 🔹 Valores DUMMY solo para CI (tests)
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: test_db
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+
+      JWT_SECRET: test_jwt_secret
+      SES_SENDER_EMAIL: test@example.com
+
+      PUBLIC_BASE_URL: http://localhost:3000/
+      AVATAR_BUCKET: dummy-avatar-bucket
+      AVATAR_CDN_BASE: https://dummy-avatar-bucket.s3.us-east-2.amazonaws.com/
+      AVATAR_PREFIX: avatars/
+
+      COOKIE_DOMAIN: ""
+      CROSS_SITE_COOKIES: "0"
+      DAILY_TZ: UTC
+      GENERATION_SECRET: dummy_generation_secret
+      DISABLE_SCHEDULER: "1"   # así no corre scheduler en CI
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
