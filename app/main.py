@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from app.routers import auth_router, health_router, users_router, puzzles_router
+from app.routers import auth_router, health_router, users_router, puzzles_router, debug_router
 from app.services import puzzle_service
 from app.core.config import settings
 from app.core.logging import app_logger
@@ -76,3 +76,4 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(users_router.router)
 app.include_router(puzzles_router.router)
+app.include_router(debug_router.router)
