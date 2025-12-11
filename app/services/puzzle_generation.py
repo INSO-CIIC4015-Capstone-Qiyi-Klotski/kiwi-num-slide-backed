@@ -681,7 +681,7 @@ def generate_and_store_puzzles(
 
             _ = puzzles_repo.insert_puzzle(
                 conn=conn,
-                author_id=-1,  # "system"
+                author_id=1,  # "system"
                 title=f"AutoGen {N}x{N}",
                 size=N,
                 board_spec=spec,
