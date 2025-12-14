@@ -138,7 +138,7 @@ LAST_NAMES = [
     "Rivera", "Santos", "Martínez", "García", "Núñez", "Ramírez", "Torres", "Díaz", "Vega",
     "Pérez", "López", "Rodríguez", "Castro", "Ramos", "Gómez", "Mendoza", "Suárez", "Figueroa",
 ]
-ANIMAL_AVATARS = ["giraffe", "hippo", "leon", "monkey", "zebra"]
+ANIMAL_AVATARS = ["fish", "pumpkin", "red_fox", "squirrel"]
 
 
 def slugify(s: str) -> str:
