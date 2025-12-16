@@ -18,7 +18,8 @@ No guarantees are made regarding ongoing maintenance, security patches, or updat
 
 If you discover a potential security vulnerability, please **do not open a public issue**.
 
-Instead, report the issue privately by contacting the repository owner through GitHub.
+Instead, please report the issue using GitHub's private vulnerability reporting feature,
+or contact the repository owner directly through GitHub.
 
 Responsible disclosure is appreciated.  
 Please note that responses or fixes are **not guaranteed**, given the academic nature and current project status.
