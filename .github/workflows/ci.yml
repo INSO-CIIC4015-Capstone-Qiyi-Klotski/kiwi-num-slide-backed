@@ -11,21 +11,29 @@ jobs:
     timeout-minutes: 15
 
     env:
-      # Dummy values ​​to avoid errors due to undefined variables
+      # --- DB (dummy) ---
       DB_HOST: localhost
       DB_PORT: 5432
       DB_NAME: test_db
       DB_USER: test_user
       DB_PASSWORD: test_password
 
+      # --- Auth / JWT ---
       JWT_SECRET: test_jwt_secret
+
+      # --- AWS / SES (dummy, NOT secrets) ---
+      AWS_REGION: us-east-1
       SES_SENDER_EMAIL: test@example.com
 
+      # --- URLs ---
       PUBLIC_BASE_URL: http://localhost:3000/
+
+      # --- Avatars / S3 (dummy) ---
       AVATAR_BUCKET: dummy-avatar-bucket
       AVATAR_CDN_BASE: https://dummy-avatar-bucket.s3.us-east-2.amazonaws.com/
       AVATAR_PREFIX: avatars/
 
+      # --- Cookies / flags ---
       COOKIE_DOMAIN: ""
       CROSS_SITE_COOKIES: "0"
       DAILY_TZ: UTC
