@@ -1,0 +1,57 @@
+name: CI (Backend)
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # --- DB (dummy) ---
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: test_db
+      DB_USER: test_user
+      DB_PASSWORD: test_password
+
+      # --- Auth / JWT ---
+      JWT_SECRET: test_jwt_secret
+
+      # --- AWS / SES (dummy, NOT secrets) ---
+      AWS_REGION: us-east-1
+      SES_SENDER_EMAIL: test@example.com
+
+      # --- URLs ---
+      PUBLIC_BASE_URL: http://localhost:3000/
+
+      # --- Avatars / S3 (dummy) ---
+      AVATAR_BUCKET: dummy-avatar-bucket
+      AVATAR_CDN_BASE: https://dummy-avatar-bucket.s3.us-east-2.amazonaws.com/
+      AVATAR_PREFIX: avatars/
+
+      # --- Cookies / flags ---
+      COOKIE_DOMAIN: ""
+      CROSS_SITE_COOKIES: "0"
+      DAILY_TZ: UTC
+      GENERATION_SECRET: dummy_generation_secret
+      DISABLE_SCHEDULER: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests (pytest)
+        run: pytest app/tests
