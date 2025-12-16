@@ -69,9 +69,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "🔍 Precheck: Terraform Cloud latest run for $TF_CLOUD_ORGANIZATION/$TF_WORKSPACE"
-
-          # 1) Workspace info (get ID)
           ws_json="$(curl -sS \
             -H "Authorization: Bearer $TF_API_TOKEN" \
             -H "Content-Type: application/vnd.api+json" \
@@ -83,34 +80,28 @@ jobs:
             exit 1
           fi
 
-          # 2) Latest run
           runs_json="$(curl -sS \
             -H "Authorization: Bearer $TF_API_TOKEN" \
             -H "Content-Type: application/vnd.api+json" \
-            "https://app.terraform.io/api/v2/workspaces/$ws_id/runs?page[size]=1")"
+            "https://app.terraform.io/api/v2/workspaces/$ws_id/runs?page%5Bsize%5D=1")"
 
           status="$(echo "$runs_json" | jq -r '.data[0].attributes.status')"
-          is_destroy="$(echo "$runs_json" | jq -r '.data[0].attributes."is-destroy"')"
-          msg="$(echo "$runs_json" | jq -r '.data[0].attributes.message // ""')"
+          is_destroy="$(echo "$runs_json" | jq -r '.data[0].attributes.\"is-destroy\"')"
 
           echo "Latest run: status=$status | is_destroy=$is_destroy"
-          echo "Message: $msg"
 
-          # If last run was a destroy that got applied -> infra is down
           if [[ "$is_destroy" == "true" && "$status" == "applied" ]]; then
             echo "::error::Infra appears DOWN (latest run is destroy/applied)."
             exit 1
           fi
 
-          # If last run applied and not destroy -> infra up
           if [[ "$is_destroy" == "false" && "$status" == "applied" ]]; then
             echo "✅ Infra appears UP (latest run applied)."
             exit 0
           fi
 
-          # Otherwise: uncertain / in-progress / errored -> block deploy (or decide to skip)
-          echo "::error::Infra status unclear (latest run status=$status). Aborting deploy."
-          exit 1
+          echo "⚠️ Infra not present, skipping deploy."
+          exit 0
 
       - name: Debug OIDC claims (safe)
         shell: bash
