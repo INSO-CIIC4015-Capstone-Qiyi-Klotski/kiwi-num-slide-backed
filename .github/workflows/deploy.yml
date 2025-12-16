@@ -76,7 +76,7 @@ jobs:
 
           ws_id="$(echo "$ws_json" | jq -r '.data.id')"
           if [[ -z "$ws_id" || "$ws_id" == "null" ]]; then
-            echo "::error::Workspace not found."
+            echo "::error::Terraform Cloud workspace not found. Aborting deploy."
             exit 1
           fi
 
@@ -86,22 +86,22 @@ jobs:
             "https://app.terraform.io/api/v2/workspaces/$ws_id/runs?page%5Bsize%5D=1")"
 
           status="$(echo "$runs_json" | jq -r '.data[0].attributes.status')"
-          is_destroy="$(echo "$runs_json" | jq -r '.data[0].attributes.\"is-destroy\"')"
+          is_destroy="$(echo "$runs_json" | jq -r '.data[0].attributes."is-destroy"')"
 
           echo "Latest run: status=$status | is_destroy=$is_destroy"
 
           if [[ "$is_destroy" == "true" && "$status" == "applied" ]]; then
-            echo "::error::Infra appears DOWN (latest run is destroy/applied)."
+            echo "::error::Infra is DOWN (latest run was destroy/applied). Aborting deploy."
             exit 1
           fi
 
           if [[ "$is_destroy" == "false" && "$status" == "applied" ]]; then
-            echo "✅ Infra appears UP (latest run applied)."
+            echo "✅ Infra is UP (latest run applied). Proceeding with deploy."
             exit 0
           fi
 
-          echo "⚠️ Infra not present, skipping deploy."
-          exit 0
+          echo "::error::Infra status unclear (latest run status=$status). Aborting deploy."
+          exit 1
 
       - name: Debug OIDC claims (safe)
         shell: bash
