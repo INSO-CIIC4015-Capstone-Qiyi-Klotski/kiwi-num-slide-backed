@@ -60,6 +60,58 @@ jobs:
 #      - name: Run backend tests (pytest)
 #        run: pytest app/tests
 
+      - name: Precheck infra via Terraform Cloud (latest run)
+        shell: bash
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+          TF_CLOUD_ORGANIZATION: ${{ secrets.TF_CLOUD_ORGANIZATION }}
+          TF_WORKSPACE: ${{ secrets.TF_WORKSPACE }}
+        run: |
+          set -euo pipefail
+
+          echo "🔍 Precheck: Terraform Cloud latest run for $TF_CLOUD_ORGANIZATION/$TF_WORKSPACE"
+
+          # 1) Workspace info (get ID)
+          ws_json="$(curl -sS \
+            -H "Authorization: Bearer $TF_API_TOKEN" \
+            -H "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/organizations/$TF_CLOUD_ORGANIZATION/workspaces/$TF_WORKSPACE")"
+
+          ws_id="$(echo "$ws_json" | jq -r '.data.id')"
+          if [[ -z "$ws_id" || "$ws_id" == "null" ]]; then
+            echo "::error::Workspace not found."
+            exit 1
+          fi
+
+          # 2) Latest run
+          runs_json="$(curl -sS \
+            -H "Authorization: Bearer $TF_API_TOKEN" \
+            -H "Content-Type: application/vnd.api+json" \
+            "https://app.terraform.io/api/v2/workspaces/$ws_id/runs?page[size]=1")"
+
+          status="$(echo "$runs_json" | jq -r '.data[0].attributes.status')"
+          is_destroy="$(echo "$runs_json" | jq -r '.data[0].attributes."is-destroy"')"
+          msg="$(echo "$runs_json" | jq -r '.data[0].attributes.message // ""')"
+
+          echo "Latest run: status=$status | is_destroy=$is_destroy"
+          echo "Message: $msg"
+
+          # If last run was a destroy that got applied -> infra is down
+          if [[ "$is_destroy" == "true" && "$status" == "applied" ]]; then
+            echo "::error::Infra appears DOWN (latest run is destroy/applied)."
+            exit 1
+          fi
+
+          # If last run applied and not destroy -> infra up
+          if [[ "$is_destroy" == "false" && "$status" == "applied" ]]; then
+            echo "✅ Infra appears UP (latest run applied)."
+            exit 0
+          fi
+
+          # Otherwise: uncertain / in-progress / errored -> block deploy (or decide to skip)
+          echo "::error::Infra status unclear (latest run status=$status). Aborting deploy."
+          exit 1
+
       - name: Debug OIDC claims (safe)
         shell: bash
         run: |
